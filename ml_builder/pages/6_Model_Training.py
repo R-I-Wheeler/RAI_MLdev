@@ -85,6 +85,14 @@ def main():
     if 'builder' not in st.session_state:
         st.session_state.builder = Builder()
         st.session_state.logger.log_stage_transition("START", "MODEL_TRAINING")
+    
+    # Ensure stage_completion dict has all required keys (defensive programming for edge cases)
+    if not hasattr(st.session_state.builder, 'stage_completion'):
+        st.session_state.builder.stage_completion = {stage: False for stage in ModelStage}
+    else:
+        # Ensure MODEL_SELECTION key exists in the dictionary
+        if ModelStage.MODEL_SELECTION not in st.session_state.builder.stage_completion:
+            st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = False
 
     # Initialize session caches and perform cleanup if needed
     TrainingStateManager.init_session_caches()
