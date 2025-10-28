@@ -18,6 +18,11 @@ def main():
     # Add consistent navigation
     create_sidebar_navigation()
 
+    # Check if we should navigate to training (after state is persisted)
+    if st.session_state.get('navigate_to_training', False):
+        st.session_state.navigate_to_training = False
+        st.switch_page("pages/6_Model_Training.py")
+
     # Initialize session state if needed
     if 'builder' not in st.session_state:
         st.session_state.builder = Builder()
@@ -250,8 +255,11 @@ def main():
                 # Manual workflow - select model and go to training
                 result = st.session_state.builder.select_model(selected_model)
                 if result["success"]:
-                    st.success(result["message"])
+                    # Set stage completion flag
                     st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = True
+                    
+                    # Set a navigation flag to trigger page switch after rerun
+                    st.session_state.navigate_to_training = True
 
                     # Enhanced logging for successful model selection
                     st.session_state.logger.log_stage_transition(
@@ -280,8 +288,10 @@ def main():
                                 },
                         parent_id=None
                     )
-
-                    st.switch_page(f"pages/{next_page}.py")
+                    
+                    # Show success message and rerun to persist state
+                    st.success(result["message"])
+                    st.rerun()
                 else:
                     st.error(result["message"])
                     # Enhanced error logging
