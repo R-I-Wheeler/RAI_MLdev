@@ -39,7 +39,7 @@ class ZeroValuesAnalysis:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Zero Values", type="primary", use_container_width=True):
+            if st.button("Undo Zero Values", type="primary", width='stretch'):
                 if st.session_state.zero_values_ops_applied:
                     # Restore data to entry state
                     self.builder.data = st.session_state.zero_values_entry_data.copy()
@@ -121,7 +121,7 @@ class ZeroValuesAnalysis:
                             fig = go.Figure()
                             fig.add_trace(go.Box(y=st.session_state.builder.data[col], name=col))
                             fig.update_layout(height=100, margin=dict(l=0, r=0, t=0, b=0))
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                         
                         if strategy != "keep":
                             strategy_dict[col] = strategy
@@ -271,7 +271,7 @@ class ZeroValuesAnalysis:
                                 
                                 if impact_data:
                                     impact_df = pd.DataFrame(impact_data)
-                                    st.dataframe(impact_df, use_container_width=True)
+                                    st.dataframe(impact_df, width='stretch')
                                     
                                     if len(result.get("modified_columns", [])) < len(result.get("attempted_columns", [])):
                                         st.info("⚠️ Some columns were not modified. This could be because zeros were not found in those columns during processing, despite being detected during analysis. This can happen if other strategies changed the dataset structure first.")

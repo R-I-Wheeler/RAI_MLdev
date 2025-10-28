@@ -159,7 +159,7 @@ class FeatureAnalysisComponent:
 
         # Create and display feature importance plot
         importance_fig = create_feature_importance_plot(feature_scores)
-        st.plotly_chart(importance_fig, use_container_width=True, key="feature_importance_plot")
+        st.plotly_chart(importance_fig, config={'responsive': True}, key="feature_importance_plot")
 
         # Display feature statistics
         self._render_importance_statistics(feature_scores)
@@ -215,7 +215,7 @@ class FeatureAnalysisComponent:
             ]
 
             low_imp_fig = create_low_importance_plot(low_imp_scores)
-            st.plotly_chart(low_imp_fig, use_container_width=True, key="low_importance_plot")
+            st.plotly_chart(low_imp_fig, config={'responsive': True}, key="low_importance_plot")
 
             st.warning(f"Found {len(low_importance_features)} features with low predictive power:")
             for feat in low_importance_features:
@@ -252,7 +252,7 @@ class FeatureAnalysisComponent:
             # Create correlation network visualization
             st.write("#### 🔗 Feature Correlation Network")
             corr_fig = create_correlation_network_plot(correlations)
-            st.plotly_chart(corr_fig, use_container_width=True, key="correlation_network_plot")
+            st.plotly_chart(corr_fig, config={'responsive': True}, key="correlation_network_plot")
 
             # Display correlation details
             self._render_correlation_details(correlations)

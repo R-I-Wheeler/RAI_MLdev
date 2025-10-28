@@ -57,7 +57,7 @@ class DataTypesOptimisationComponent:
         dtype_df['Suggested Action'] = suggestions
         
         # Display the DataFrame
-        st.dataframe(dtype_df, use_container_width=True)
+        st.dataframe(dtype_df, width='stretch')
         
         # Log the data types analysis
         self.logger.log_calculation(

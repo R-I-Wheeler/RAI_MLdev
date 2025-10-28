@@ -1025,7 +1025,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
             })
         
         if features_data:
-            st.dataframe(pd.DataFrame(features_data), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(features_data), width='stretch', hide_index=True)
             
             # Add expandable detailed scores
             with st.expander("🔍 Detailed Component Scores", expanded=False):
@@ -1562,7 +1562,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
                     color_continuous_scale='RdYlGn'
                 )
                 fig.add_hline(y=perf_data['accuracy'].mean(), line_dash="dash", annotation_text="Average")
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, config={'responsive': True})
             
             elif problem_type == "regression":
                 # Choose the best available metric for visualization
@@ -1613,7 +1613,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
                         annotation_text="Average"
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={'responsive': True})
                     
                     # Add interpretation helper
                     if selected_metric == 'r2':
@@ -1649,13 +1649,13 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
                                 annotation_text="Average"
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
             
             # Performance table (for both classification and regression)
             display_perf = perf_data.copy()
             if 'count' in display_perf.columns:
                 display_perf = display_perf.drop('count', axis=1)
-            st.dataframe(display_perf.style.format("{:.3f}"), use_container_width=True)
+            st.dataframe(display_perf.style.format("{:.3f}"), width='stretch')
             
             # Show group distribution (for both classification and regression)
             if 'count' in perf_data.columns:
@@ -1670,7 +1670,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
                         "Percentage": f"{percentage:.1f}%"
                     })
                 
-                st.dataframe(pd.DataFrame(dist_data), use_container_width=True, hide_index=True)
+                st.dataframe(pd.DataFrame(dist_data), width='stretch', hide_index=True)
 
     st.markdown("---")
 

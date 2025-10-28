@@ -420,11 +420,11 @@ def render_feature_analysis(builder, result, importance_df=None, limitations_res
                 st.info("Feature importance shows which features have the most influence on model predictions.")
             
             fig.update_layout(height=max(400, len(importance_df) * 30))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
             # Display the data table
             st.subheader("Feature Importance Values")
-            st.dataframe(importance_df, use_container_width=True)
+            st.dataframe(importance_df, width='stretch')
     else:
         st.error(f"Feature analysis failed: {result.get('message', 'Unknown error') if result else 'No result available'}")
     
@@ -624,7 +624,7 @@ def render_feature_analysis(builder, result, importance_df=None, limitations_res
                         selected_features=selected_features
                     )
                     
-                    st.plotly_chart(interactive_summary_plot, use_container_width=True)
+                    st.plotly_chart(interactive_summary_plot, config={'responsive': True})
                     
                     # Add helpful tips below the plot
                     st.caption("""
@@ -911,7 +911,7 @@ def render_feature_analysis(builder, result, importance_df=None, limitations_res
                                 sample_size=sample_size
                             )
                             if ale_fig is not None:
-                                st.plotly_chart(ale_fig, use_container_width=True)
+                                st.plotly_chart(ale_fig, config={'responsive': True})
                                 
                                 # Log successful ALE plot generation
                                 st.session_state.logger.log_calculation("Visualization", {
@@ -1053,7 +1053,7 @@ def render_feature_analysis(builder, result, importance_df=None, limitations_res
                     
                     # Display based on selected mode
                     if display_mode in ["Visual Tree", "Both"] and tree_fig is not None:
-                        st.plotly_chart(tree_fig, use_container_width=True, key="dt_viz_decision_tree_plot")
+                        st.plotly_chart(tree_fig, config={'responsive': True}, key="dt_viz_decision_tree_plot")
                     
                     if display_mode in ["Text Rules", "Both"] and tree_text is not None:
                         st.subheader("📝 Decision Tree Rules")

@@ -551,7 +551,7 @@ def display_calibration_analysis(analysis: Dict[str, Any]):
     """Display the calibration analysis results."""
     
     # Display calibration plot with unique key
-    st.plotly_chart(analysis["calibration_plot"], use_container_width=True, key="calibration_analysis_plot")
+    st.plotly_chart(analysis["calibration_plot"], config={'responsive': True}, key="calibration_analysis_plot")
     
     _display_calibration_metrics(analysis)
 
@@ -559,7 +559,7 @@ def display_calibration_results(analysis: Dict[str, Any]):
     """Display the calibration results after applying calibration."""
     
     # Display calibration plot with unique key for results
-    st.plotly_chart(analysis["calibration_plot"], use_container_width=True, key="calibration_results_plot")
+    st.plotly_chart(analysis["calibration_plot"], config={'responsive': True}, key="calibration_results_plot")
     
     _display_calibration_metrics(analysis)
 
@@ -624,7 +624,7 @@ def _display_calibration_metrics(analysis: Dict[str, Any]):
 
         if per_class_data:
             df = pd.DataFrame(per_class_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, width='stretch', hide_index=True)
 
             # Class imbalance warning
             frequencies = [float(item['Class Frequency'].rstrip('%'))/100 for item in per_class_data]

@@ -332,7 +332,7 @@ class ManualSelectionComponent:
                     ),
                 },
                 hide_index=True,
-                use_container_width=True,
+                width='stretch',
                 key="feature_selection_table"
             )
 
@@ -449,7 +449,7 @@ class ManualSelectionComponent:
         # Create correlation network visualization
         st.write("#### 🔗 Feature Correlation Network")
         corr_fig = create_correlation_network_plot(self.correlations)
-        st.plotly_chart(corr_fig, use_container_width=True, key="manual_correlation_network_plot")
+        st.plotly_chart(corr_fig, config={'responsive': True}, key="manual_correlation_network_plot")
 
         # Build correlation groups and analysis
         correlation_groups = build_correlation_groups(self.correlations)
@@ -517,7 +517,7 @@ class ManualSelectionComponent:
                 ),
             },
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
             key="correlation_selection_table"
         )
 
@@ -621,7 +621,7 @@ class ManualSelectionComponent:
                             "group": "Group"
                         },
                         hide_index=True,
-                        use_container_width=True
+                        width='stretch'
                     )
 
                     st.info("""

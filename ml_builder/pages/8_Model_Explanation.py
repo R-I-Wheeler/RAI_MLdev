@@ -250,7 +250,7 @@ def main():
                             # Display the mapping table with styling
                             st.dataframe(
                                 mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                                use_container_width=True,
+                                width='stretch',
                                 hide_index=True
                             )
                         else:

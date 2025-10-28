@@ -122,7 +122,7 @@ def analyse_network_architecture(param_values, scores, best_value):
             showlegend=False,
             height=400
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, config={'responsive': True})
     
     with arch_tab2:
         try:
@@ -256,7 +256,7 @@ def analyse_network_architecture(param_values, scores, best_value):
                     )
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, config={'responsive': True})
                 
                 # Add architecture details with normalized score lookup
                 st.info(f"""
@@ -533,11 +533,11 @@ def display_optuna_results(results):
                     st.metric("Total Duration", "N/A")
             
             if results['info']['optimisation_plots']['timeline'] is not None:
-                st.plotly_chart(results['info']['optimisation_plots']['timeline'], use_container_width=True)
+                st.plotly_chart(results['info']['optimisation_plots']['timeline'], config={'responsive': True})
 
             st.subheader("Optimisation Progress")
             if results['info']['optimisation_plots']['history'] is not None:
-                st.plotly_chart(results['info']['optimisation_plots']['history'], use_container_width=True)
+                st.plotly_chart(results['info']['optimisation_plots']['history'], config={'responsive': True})
                 st.markdown("""
                     ### Understanding the Optimisation History Plot
                     
@@ -564,7 +564,7 @@ def display_optuna_results(results):
                         """)
 
             if results['info']['optimisation_plots']['param_importances_fig'] is not None:
-                st.plotly_chart(results['info']['optimisation_plots']['param_importances_fig'], use_container_width=True)
+                st.plotly_chart(results['info']['optimisation_plots']['param_importances_fig'], config={'responsive': True})
 
             # Get parameter data
             if ('params' in results['info']['optimisation_history'] and 
@@ -684,7 +684,7 @@ def display_optuna_results(results):
                                     fig, auto_mean, num_mean, total_configs = analyse_mixed_parameter(
                                         param_values, filtered_scores, best_value
                                     )
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.plotly_chart(fig, config={'responsive': True})
                                     
                                     if auto_mean is not None or num_mean is not None:
                                         auto_info = f"- 'auto' setting mean score: {auto_mean:.4f}" if auto_mean is not None else ""
@@ -779,7 +779,7 @@ def display_optuna_results(results):
                                             height=300
                                         )
                                         
-                                        st.plotly_chart(evolution_fig, use_container_width=True)
+                                        st.plotly_chart(evolution_fig, config={'responsive': True})
                                         
                                     except (ValueError, TypeError):
                                         # Fallback to categorical visualization
@@ -845,7 +845,7 @@ def display_optuna_results(results):
                                             height=400
                                         )
                                         
-                                        st.plotly_chart(fig, use_container_width=True)
+                                        st.plotly_chart(fig, config={'responsive': True})
             else:
                 st.info("Detailed optimisation metrics not available for this run.")
         
@@ -1303,7 +1303,7 @@ def display_search_training_results(results):
         
         # Show the table with all configurations
         st.write("The table below shows all parameter combinations tested during the tuning process.")
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df, width='stretch')
         
         st.info("""
             **Understanding the Results Table:**

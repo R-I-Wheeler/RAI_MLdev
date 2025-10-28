@@ -216,7 +216,7 @@ def display_sample_predictions(problem_type):
     
     predictions_df = predictions_df.reset_index(drop=True)
     styled_df = predictions_df.style.apply(highlight_predictions, axis=1)
-    st.dataframe(styled_df, use_container_width=True)
+    st.dataframe(styled_df, width='stretch')
     
     # Calculate and display metrics for sample predictions
     # Handle both binary and multiclass classification

@@ -148,7 +148,7 @@ class DatasetOverviewComponent:
         # Use a more modern dataframe display with highlighted first row
         st.dataframe(
             self.data,
-            use_container_width=True,
+            width='stretch',
             height=300
         )
         
@@ -175,7 +175,7 @@ class DatasetOverviewComponent:
             # Display the summary with better styling
             st.dataframe(
                 summary_df,
-                use_container_width=True,
+                width='stretch',
                 height=400,
                 hide_index=True
             )
@@ -230,7 +230,7 @@ class DatasetOverviewComponent:
             # Display with better formatting
             st.dataframe(
                 cat_df, 
-                use_container_width=True,
+                width='stretch',
                 height=400,
                 hide_index=True
             )
@@ -286,7 +286,7 @@ class DatasetOverviewComponent:
                     height=400
                 )
                 fig.update_layout(yaxis={'categoryorder':'total ascending'})
-                st.plotly_chart(fig, use_container_width=True, key=f"categorical_analysis_{self.keyidentifier}")
+                st.plotly_chart(fig, config={'responsive': True}, key=f"categorical_analysis_{self.keyidentifier}")
             
             # Log categorical analysis
             if self.logger:
@@ -358,7 +358,7 @@ class DatasetOverviewComponent:
         
         with col1:
             # Display data types table
-            st.dataframe(dtypes_df, use_container_width=True, hide_index=True)
+            st.dataframe(dtypes_df, width='stretch', hide_index=True)
         
         with col2:
             # Add a pie chart to visualize data type distribution
@@ -371,7 +371,7 @@ class DatasetOverviewComponent:
             )
             fig.update_traces(textposition='inside', textinfo='percent+label')
             fig.update_layout(margin=dict(t=40, b=0, l=0, r=0))
-            st.plotly_chart(fig, use_container_width=True, key=f"data_types_{self.keyidentifier}")
+            st.plotly_chart(fig, config={'responsive': True}, key=f"data_types_{self.keyidentifier}")
         
         # Log data types analysis
         if self.logger:
@@ -400,7 +400,7 @@ class DatasetOverviewComponent:
             # Display missing values table
             st.dataframe(
                 missing_cols,
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -419,7 +419,7 @@ class DatasetOverviewComponent:
                 )
                 fig.update_layout(yaxis={'categoryorder':'total ascending'})
                 fig.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
-                st.plotly_chart(fig, use_container_width=True, key=f"missing_values_{self.keyidentifier}")
+                st.plotly_chart(fig, config={'responsive': True}, key=f"missing_values_{self.keyidentifier}")
         else:
             st.success("✅ No missing values found in the dataset")
         
@@ -649,7 +649,7 @@ class DatasetOverviewComponent:
             # Rotate x-axis labels for better readability
             fig.update_xaxes(tickangle=45)
             
-            st.plotly_chart(fig, use_container_width=True, key=f"association_heatmap_{self.keyidentifier}")
+            st.plotly_chart(fig, config={'responsive': True}, key=f"association_heatmap_{self.keyidentifier}")
             
             
         except Exception as e:

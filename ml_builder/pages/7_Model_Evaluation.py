@@ -851,7 +851,7 @@ def main():
                                         # Display the mapping table with styling
                                         st.dataframe(
                                             mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                                            use_container_width=True,
+                                            width='stretch',
                                             hide_index=True
                                         )
                                     else:
@@ -1001,7 +1001,7 @@ def main():
             with col3:
                 if st.button("⏭️ Continue to Model Explanation", 
                            key="bottom_next",
-                           use_container_width=True,
+                           width='stretch',
                            type="primary"):
                     st.session_state.logger.log_user_action(
                         "Navigation",

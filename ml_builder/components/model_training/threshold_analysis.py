@@ -381,7 +381,7 @@ def display_current_performance(analysis: Dict[str, Any]):
         index=[f"Actual {i}" for i in range(len(analysis['confusion_matrix']))],
         columns=[f"Predicted {i}" for i in range(len(analysis['confusion_matrix'][0]))]
     )
-    st.dataframe(cm_df, use_container_width=True)
+    st.dataframe(cm_df, width='stretch')
     
     # Class balance information
     if analysis['is_binary']:
@@ -574,14 +574,14 @@ def display_binary_threshold_results(optimal_threshold: float, results: Dict, y_
     st.subheader("📈 Threshold Analysis Curves")
     
     fig = create_threshold_curves_binary(results, optimal_threshold)
-    st.plotly_chart(fig, use_container_width=True, key="binary_threshold_curves")
+    st.plotly_chart(fig, config={'responsive': True}, key="binary_threshold_curves")
     
     # ROC and PR curves if requested
     if show_curves:
         st.subheader("📊 ROC and Precision-Recall Curves")
         
         roc_pr_fig = create_roc_pr_curves_binary(y_true, y_prob, optimal_threshold)
-        st.plotly_chart(roc_pr_fig, use_container_width=True, key="binary_roc_pr_curves")
+        st.plotly_chart(roc_pr_fig, config={'responsive': True}, key="binary_roc_pr_curves")
 
 def create_threshold_curves_binary(results: Dict, optimal_threshold: float):
     """Create threshold analysis curves for binary classification."""

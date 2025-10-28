@@ -40,7 +40,7 @@ class CategoricalEncodingComponent:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Categorical Encoding", type="primary", use_container_width=True):
+            if st.button("Undo Categorical Encoding", type="primary", width='stretch'):
                 if st.session_state.categorical_encoding_ops_applied:
                     # Restore data to entry state
                     entry_data = st.session_state.categorical_encoding_entry_data
@@ -557,7 +557,7 @@ class CategoricalEncodingComponent:
                             # Display the mapping table with styling
                             st.dataframe(
                                 mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                                use_container_width=True
+                                width='stretch'
                             )
                         except Exception as e:
                             st.error(f"Error displaying mapping: {str(e)}")

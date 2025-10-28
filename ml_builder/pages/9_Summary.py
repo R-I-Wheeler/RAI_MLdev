@@ -1051,7 +1051,7 @@ def main():
                             margin=dict(t=30, b=30, l=30, r=30)
                         )
                         
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
                         
                         # Add class balance analysis for classification
                         if len(class_dist) > 1:
@@ -1083,7 +1083,7 @@ def main():
                             height=250,
                             margin=dict(t=30, b=30, l=30, r=30)
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
                         
                         # Add regression target statistics
                         col1, col2, col3 = st.columns(3)
@@ -1164,7 +1164,7 @@ def main():
                     )
                     
                     # Display the classification metrics chart
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={'responsive': True})
                     
                     # Add multiclass-specific additional metrics if available
                     if current_problem_type == "multiclass_classification":
@@ -1244,7 +1244,7 @@ def main():
                         showlegend=False
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={'responsive': True})
                     
                     # Display error metrics in a dashboard format
                     error_cols = st.columns(3)
@@ -1335,7 +1335,7 @@ def main():
                             paper_bgcolor='rgba(0,0,0,0)',
                             font=dict(size=12, color='#808080')
                         )
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
                         
                         # Add more detailed stability metrics
                         col1, col2 = st.columns(2)

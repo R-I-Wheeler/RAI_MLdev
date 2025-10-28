@@ -54,7 +54,7 @@ class OutlierDetectionComponent:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Outlier Handling", type="primary", use_container_width=True):
+            if st.button("Undo Outlier Handling", type="primary", width='stretch'):
                 if st.session_state.outlier_detection_ops_applied:
                     # Restore data to entry state
                     entry_data = st.session_state.outlier_detection_entry_data
@@ -477,7 +477,7 @@ class OutlierDetectionComponent:
                                 ]
                             }
                             stats_df = pd.DataFrame(stats_data)
-                            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                            st.dataframe(stats_df, width='stretch', hide_index=True)
 
                             # Log detailed column statistics
                             self.logger.log_calculation(
@@ -665,12 +665,12 @@ class OutlierDetectionComponent:
                                         ]
                                     }
                                     stats_df = pd.DataFrame(stats_data)
-                                    st.dataframe(stats_df, use_container_width=True, hide_index=True)
+                                    st.dataframe(stats_df, width='stretch', hide_index=True)
 
                                 with col2:
                                     fig = px.box(self.builder.training_data, y=col,
                                                title=f"Box Plot After {handling_dict[col]} - {col}")
-                                    st.plotly_chart(fig, use_container_width=True)
+                                    st.plotly_chart(fig, config={'responsive': True})
 
                     # Create a DataframeComparisonComponent instance
                     comparison_component = DataframeComparisonComponent(

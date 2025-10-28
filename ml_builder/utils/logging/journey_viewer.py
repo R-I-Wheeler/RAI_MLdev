@@ -268,7 +268,7 @@ def render_journey_viewer(expanded=False):
                 st.info("💡 **Enhanced Branching Visualization!** The journey map now creates separate visual groups for different branch paths within each stage. Main path steps are in blue boxes with solid borders, while different branch groups get their own colored boxes with dotted borders (red, orange, purple, green, pink). Group labels show 📍 Main path and 🔀 Branch numbers when there are multiple paths in a stage. Hover over nodes for details!")
                 
                 # Display the enhanced visualization
-                chart_container = st.plotly_chart(fig, use_container_width=True, key="journey_chart")
+                chart_container = st.plotly_chart(fig, config={'responsive': True}, key="journey_chart")
                 
                 # Export options
                 st.markdown('<div class="journey-viewer-container">', unsafe_allow_html=True)
@@ -290,7 +290,7 @@ def render_journey_viewer(expanded=False):
                         data=data,
                         file_name=filename,
                         mime="text/html",
-                        use_container_width=True,
+                        width='stretch',
                         type="primary"
                     )
                 with col3:
@@ -445,7 +445,7 @@ def render_journey_viewer(expanded=False):
                                 file_name=filename,
                                 mime=mime_type,
                                 type=button_type,
-                                use_container_width=True
+                                width='stretch'
                             )
                     
                     with col3:
@@ -568,7 +568,7 @@ def render_journey_viewer(expanded=False):
                             barmode='group',
                             showlegend=True
                         )
-                        st.plotly_chart(fig_bar, use_container_width=True)
+                        st.plotly_chart(fig_bar, config={'responsive': True})
                 else:
                     st.info("No data available for analytics yet.")
         else:

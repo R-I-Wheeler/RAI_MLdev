@@ -121,7 +121,7 @@ def display_target_distribution(data: pd.DataFrame, target_column: str) -> None:
             font=dict(color="green"),
         )
         
-        st.plotly_chart(fig, use_container_width=True, key="target_regression_plot")
+        st.plotly_chart(fig, config={'responsive': True}, key="target_regression_plot")
 
         # Add explanation for the visualization
         with st.expander("📊 How to Interpret This Visualization", expanded=False):
@@ -219,7 +219,7 @@ def display_target_distribution(data: pd.DataFrame, target_column: str) -> None:
             uniformtext_mode='hide'
         )
         
-        st.plotly_chart(fig, use_container_width=True, key="target_binary_plot")
+        st.plotly_chart(fig, config={'responsive': True}, key="target_binary_plot")
         
         # Add explanation for binary classification visualization
         with st.expander("📊 How to Interpret This Visualization", expanded=False):
@@ -311,7 +311,7 @@ def display_target_distribution(data: pd.DataFrame, target_column: str) -> None:
             uniformtext_mode='hide'
         )
         
-        st.plotly_chart(fig, use_container_width=True, key="target_multiclass_plot")
+        st.plotly_chart(fig, config={'responsive': True}, key="target_multiclass_plot")
         
         # Add explanation for multi-class classification visualization
         with st.expander("📊 How to Interpret This Visualization", expanded=False):
@@ -367,7 +367,7 @@ def display_target_distribution(data: pd.DataFrame, target_column: str) -> None:
         
         # Show class distribution table
         st.write("#### Class Distribution Summary:")
-        st.dataframe(class_summary, use_container_width=True, hide_index=True)
+        st.dataframe(class_summary, width='stretch', hide_index=True)
         
         # Add insights about class distribution
         insights = []
@@ -908,7 +908,7 @@ def analyse_feature_relationships(data: pd.DataFrame, target_column: str) -> Non
                             # Use st.dataframe with horizontal scrolling enabled
                             st.dataframe(
                                 styled_table,
-                                use_container_width=True,
+                                width='stretch',
                                 height=max(200, min(500, 80 + 35 * len(display_table)))  # Better height adjustment
                             )
                             
@@ -1773,7 +1773,7 @@ def style_and_display_table(table, title, display_cols=None, user_level="Beginne
     
     st.dataframe(
         styled_table,
-        use_container_width=True,
+        width='stretch',
         height=max(200, min(400, 80 + 35 * len(table_cleaned)))  # Better height adjustment
     )
     

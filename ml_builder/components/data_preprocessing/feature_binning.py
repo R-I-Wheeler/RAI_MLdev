@@ -298,7 +298,7 @@ class FeatureBinningComponent:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Feature Binning", type="primary", use_container_width=True):
+            if st.button("Undo Feature Binning", type="primary", width='stretch'):
                 if st.session_state.feature_binning_ops_applied:
                     # Restore data to entry state
                     entry_data = st.session_state.feature_binning_entry_data
@@ -1204,7 +1204,7 @@ class FeatureBinningComponent:
             
             if table_data:
                 df = pd.DataFrame(table_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width='stretch')
         
         # Handle numeric binning result which is a list of (lower, upper) tuples
         elif isinstance(bin_ranges, list) and all(isinstance(x, (list, tuple)) and len(x) == 2 for x in bin_ranges):
@@ -1375,7 +1375,7 @@ class FeatureBinningComponent:
                 
                 if table_data:
                     df = pd.DataFrame(table_data)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width='stretch')
             else:
                 # Fall back to showing bin_ranges directly if structure is unexpected
                 st.write(f"Bin mapping: {bin_ranges}")
@@ -1422,7 +1422,7 @@ class FeatureBinningComponent:
                 
                 if table_data:
                     df = pd.DataFrame(table_data)
-                    st.dataframe(df, use_container_width=True)
+                    st.dataframe(df, width='stretch')
             else:
                 st.write("(Binned column not found in training data)")
     
@@ -1575,7 +1575,7 @@ class FeatureBinningComponent:
             # Add annotation explaining what we're seeing
             st.info("📈 This chart shows how the event rate (proportion of positive outcomes) varies across different bins of the feature. Bins with significantly different event rates from the overall average indicate strong predictive power.")
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
             # Store event rate data for the bin details table
             if not hasattr(st.session_state, 'event_rate_data'):
@@ -1709,7 +1709,7 @@ class FeatureBinningComponent:
             # Add annotation explaining what we're seeing
             st.info("📊 This stacked bar chart shows how the distribution of target classes varies across different bins. Bins with significantly different class distributions indicate strong predictive power for multi-class classification.")
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
             # Store class distribution data for the bin details table
             if not hasattr(st.session_state, 'event_rate_data'):
@@ -1855,7 +1855,7 @@ class FeatureBinningComponent:
             )
             
             st.info("📈 This chart shows how the mean target value varies across different bins. Bins with significantly different means indicate predictive power.")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
             # Store event rate data for the bin details table (even for continuous targets)
             if not hasattr(st.session_state, 'event_rate_data'):
@@ -1909,6 +1909,6 @@ class FeatureBinningComponent:
                 delta=None
             )
 
-        st.dataframe(self.builder.testing_data.style.background_gradient(cmap='Blues'), use_container_width=True)
+        st.dataframe(self.builder.testing_data.style.background_gradient(cmap='Blues'), width='stretch')
 
     # ... existing code ... 

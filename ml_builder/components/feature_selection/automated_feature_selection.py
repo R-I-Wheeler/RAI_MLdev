@@ -234,7 +234,7 @@ class AutomatedFeatureSelectionComponent:
             )
         )
         
-        st.plotly_chart(fig, use_container_width=True, key="boruta_feature_importance_plot")
+        st.plotly_chart(fig, config={'responsive': True}, key="boruta_feature_importance_plot")
 
     def _render_feature_status_section(self, feature_ranking: List[Dict[str, Any]]):
         """Render the feature status section with expandable lists."""

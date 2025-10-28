@@ -395,7 +395,7 @@ class FinalDataReviewComponent:
             # Enhanced preview with styling
             st.dataframe(
                 self.builder.training_data.head(10).style.background_gradient(cmap='Blues'),
-                use_container_width=True
+                width='stretch'
             )
             
         with tabs[1]:
@@ -403,7 +403,7 @@ class FinalDataReviewComponent:
             numeric_stats = self.builder.training_data.describe()
             st.dataframe(
                 numeric_stats.style.background_gradient(cmap='Greens'),
-                use_container_width=True
+                width='stretch'
             )
             
         with tabs[2]:
@@ -427,7 +427,7 @@ class FinalDataReviewComponent:
                     names=dtype_counts.index.astype(str),  # Ensure names are strings
                     title="Distribution of Data Types"
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, config={'responsive': True})
             
         with tabs[3]:
             # Detailed column information
@@ -443,7 +443,7 @@ class FinalDataReviewComponent:
             })
             st.dataframe(
                 column_info.style.background_gradient(subset=['Memory Usage (KB)'], cmap='YlOrRd'),
-                use_container_width=True
+                width='stretch'
             )
 
         # Data Quality Metrics
@@ -473,7 +473,7 @@ class FinalDataReviewComponent:
                 labels={'x': 'Column', 'y': 'Completeness (%)'}
             )
             fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
         
         with col2:
             # Unique value distribution
@@ -485,7 +485,7 @@ class FinalDataReviewComponent:
                 labels={'x': 'Column', 'y': 'Unique Values (%)'}
             )
             fig.update_layout(showlegend=False)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
     def _display_data_quality_warnings(self):
         """
@@ -640,4 +640,4 @@ class FinalDataReviewComponent:
                 delta=None
             )
 
-        st.dataframe(self.builder.testing_data.style.background_gradient(cmap='Blues'), use_container_width=True) 
+        st.dataframe(self.builder.testing_data.style.background_gradient(cmap='Blues'), width='stretch') 

@@ -575,7 +575,7 @@ def render_automation_dashboard(result):
             if 'results_df' in comparison:
                 results_data = comparison['results_df']
                 if results_data:
-                    st.dataframe(pd.DataFrame(results_data), use_container_width=True)
+                    st.dataframe(pd.DataFrame(results_data), width='stretch')
 
         st.markdown("#### Final Selection")
         st.write(f"- **Selected Model:** {details.get('selected_model', 'N/A')}")
@@ -608,7 +608,7 @@ def render_automation_dashboard(result):
                         {'Parameter': k, 'Value': str(v)}
                         for k, v in best_params.items()
                     ])
-                    st.dataframe(params_df, use_container_width=True, hide_index=True)
+                    st.dataframe(params_df, width='stretch', hide_index=True)
                 else:
                     st.write("No parameters available")
 
@@ -635,7 +635,7 @@ def render_automation_dashboard(result):
                     # Display as table
                     st.dataframe(
                         metrics_df[['Metric', 'Mean']],
-                        use_container_width=True,
+                        width='stretch',
                         hide_index=True
                     )
 
@@ -682,7 +682,7 @@ def render_automation_dashboard(result):
                             )
                         )
 
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
                     else:
                         # Fallback to simple bar chart of mean metrics
                         fig = go.Figure(data=[
@@ -704,7 +704,7 @@ def render_automation_dashboard(result):
                             showlegend=False
                         )
 
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
 
         st.markdown("#### Stability Analysis")
         stability = details.get('stability_analysis', {})
@@ -766,7 +766,7 @@ def render_automation_dashboard(result):
                     })
 
                 comparison_df = pd.DataFrame(comparison_data)
-                st.dataframe(comparison_df, use_container_width=True, hide_index=True)
+                st.dataframe(comparison_df, width='stretch', hide_index=True)
 
                 # Add note about optimization
                 st.caption(f"⚡ Optimized for: **{details.get('threshold_criterion', 'N/A')}**")
@@ -813,7 +813,7 @@ def render_automation_dashboard(result):
                     )
                 )
 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, config={'responsive': True})
             else:
                 st.info("No performance comparison data available")
         else:

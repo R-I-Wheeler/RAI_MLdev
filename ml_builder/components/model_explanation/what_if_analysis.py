@@ -405,7 +405,7 @@ def display_prediction_results(prediction: float, shap_values: np.ndarray,
             showlegend=False
         )
         
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, config={'responsive': True})
     
     # Create force plot
     st.markdown("### 📊 SHAP Force Plot")
@@ -672,7 +672,7 @@ def display_prediction_results(prediction: float, shap_values: np.ndarray,
         )
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
         with col2:
             if problem_type == "multiclass_classification":
                 predicted_class = np.argmax(prediction) if isinstance(prediction, np.ndarray) else 0
@@ -754,7 +754,7 @@ def display_prediction_results(prediction: float, shap_values: np.ndarray,
                     vmin=-abs(impact_df['Impact'].astype(float)).max(),
                     vmax=abs(impact_df['Impact'].astype(float)).max()
                 ),
-                use_container_width=True
+                width='stretch'
             )
         with col2:
             if problem_type == "multiclass_classification":
@@ -1552,7 +1552,7 @@ def render_what_if_analysis():
 
                                 # Create feature difference table
                                 st.markdown("### Feature Comparison")
-                                st.dataframe(diff_df.style.apply(highlight_differences, axis=0), use_container_width=True)
+                                st.dataframe(diff_df.style.apply(highlight_differences, axis=0), width='stretch')
                                 
                                 # Create bar chart of changes
                                 changes = [(data2['values'][f] - data1['values'][f]) for f in numeric_features]
@@ -1571,7 +1571,7 @@ def render_what_if_analysis():
                                     height=400
                                 )
                                 
-                                st.plotly_chart(fig, use_container_width=True)
+                                st.plotly_chart(fig, config={'responsive': True})
                                 
                                 # Log the feature changes visualization
                                 st.session_state.logger.log_calculation("Visualization", {
@@ -1748,7 +1748,7 @@ def render_what_if_analysis():
                                             showlegend=True
                                         )
                                         
-                                        st.plotly_chart(radar_fig, use_container_width=True)
+                                        st.plotly_chart(radar_fig, config={'responsive': True})
                                         
                                         # Log the radar chart creation
                                         st.session_state.logger.log_calculation("Visualization", {
@@ -1786,7 +1786,7 @@ def render_what_if_analysis():
                                             vmin=0,
                                             vmax=max_shap_diff
                                         ),
-                                        use_container_width=True
+                                        width='stretch'
                                     )
                                     
                                     st.info("""
@@ -2120,7 +2120,7 @@ This is calculated by changing only this feature's value from the first scenario
                                                 hovermode="x"
                                             )
                                             
-                                            st.plotly_chart(fig, use_container_width=True)
+                                            st.plotly_chart(fig, config={'responsive': True})
                                             
                                             # Add explanation text below chart
                                             same_direction = current_analysis['same_direction']
@@ -2363,7 +2363,7 @@ This is calculated by changing only this feature's value from the first scenario
                                 file_name=report_data['filename'],
                                 mime=report_data['mime_type'],
                                 key=f"final_download_{report_key}",
-                                use_container_width=True
+                                width='stretch'
                             )
                         
                         # Add help information about report formats

@@ -456,7 +456,7 @@ def main():
                         })
                         st.dataframe(
                             mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                            use_container_width=True,
+                            width='stretch',
                             hide_index=True
                         )
                     else:
@@ -484,7 +484,7 @@ def main():
                         })
                         st.dataframe(
                             mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                            use_container_width=True,
+                            width='stretch',
                             hide_index=True
                         )
                     else:

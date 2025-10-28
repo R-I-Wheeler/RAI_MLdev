@@ -107,7 +107,7 @@ def render_model_explainer_section(content_manager: ContentManager):
         # Display with custom styling for better readability
         st.dataframe(
             df,
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             height=400
         )

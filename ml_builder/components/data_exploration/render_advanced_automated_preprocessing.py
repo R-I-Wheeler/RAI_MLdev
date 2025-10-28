@@ -1072,7 +1072,7 @@ def render_advanced_preprocessing_dashboard(builder, include_feature_selection=F
                                         })
 
                                 if removal_data:
-                                    st.dataframe(pd.DataFrame(removal_data), use_container_width=True, hide_index=True)
+                                    st.dataframe(pd.DataFrame(removal_data), width='stretch', hide_index=True)
                             else:
                                 st.write("- **Removed features:**")
                                 for feat in removed_features:
@@ -1125,7 +1125,7 @@ def render_advanced_preprocessing_dashboard(builder, include_feature_selection=F
                                             })
 
                                     if removal_data:
-                                        st.dataframe(pd.DataFrame(removal_data), use_container_width=True, hide_index=True)
+                                        st.dataframe(pd.DataFrame(removal_data), width='stretch', hide_index=True)
                             else:
                                 st.write("- **Removed by group:**")
                                 for group_id, features in removed_by_group.items():
@@ -1209,7 +1209,7 @@ def render_advanced_preprocessing_dashboard(builder, include_feature_selection=F
                                         })
 
                                 if removal_data:
-                                    st.dataframe(pd.DataFrame(removal_data), use_container_width=True, hide_index=True)
+                                    st.dataframe(pd.DataFrame(removal_data), width='stretch', hide_index=True)
 
                     elif "Validation" in step_name:
                         st.write(f"- **Training shape:** {step_details.get('final_training_shape', 'N/A')}")

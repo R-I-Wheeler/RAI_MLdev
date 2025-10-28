@@ -27,7 +27,7 @@ def render_journey_point_popover():
     stage_str = current_stage.name if isinstance(current_stage, ModelStage) else str(current_stage).upper()
 
     # Sidebar popover to add a note
-    with st.sidebar.popover("Create Journey Point", use_container_width=True):
+    with st.sidebar.popover("Create Journey Point", width='stretch'):
         st.caption("Add a note to your ML journey at the current stage.")
         with st.form("journey_note_form", clear_on_submit=True):
             note_text = st.text_area(
@@ -36,7 +36,7 @@ def render_journey_point_popover():
                 placeholder="Write a brief note...",
                 height=120,
             )
-            submitted = st.form_submit_button("Save", type="primary", use_container_width=True)
+            submitted = st.form_submit_button("Save", type="primary", width='stretch')
 
             if submitted:
                 text = (note_text or "").strip()

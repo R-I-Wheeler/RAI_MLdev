@@ -133,7 +133,7 @@ class FeatureRelationshipsComponent:
                     st.markdown(explanation["interpretation"])
 
             # Make plot container larger and more prominent
-            st.plotly_chart(summary["visualisations"]["associations"], use_container_width=True)
+            st.plotly_chart(summary["visualisations"]["associations"], config={'responsive': True})
             
             # Add null check for associations_matrix
             #associations_matrix = summary.get("associations_matrix")
@@ -142,7 +142,7 @@ class FeatureRelationshipsComponent:
                 # Display the regular DataFrame with improved styling
             #    st.dataframe(
             #        associations_matrix["data"],
-            #        use_container_width=True,
+            #        width='stretch',
             #        height=400
             #    )
         else:
@@ -604,7 +604,7 @@ class FeatureRelationshipsComponent:
                 })
                 
                 # Display the styled table with increased height for better readability
-                st.dataframe(styled_df, use_container_width=True, height=500)
+                st.dataframe(styled_df, width='stretch', height=500)
                 
                 # Add detailed recommendations in an expandable section
                 with st.expander("📋 View Full Recommendations and Issues Details", expanded=False):
@@ -728,12 +728,12 @@ class FeatureRelationshipsComponent:
             
             col1, col2 = st.columns(2)
             with col1:
-                st.plotly_chart(network_fig, use_container_width=True)
+                st.plotly_chart(network_fig, config={'responsive': True})
             
             with col2:
                 # Create correlation strength heatmap for identified groups
                 group_heatmap = self._create_group_correlation_heatmap(correlation_matrix, groups)
-                st.plotly_chart(group_heatmap, use_container_width=True)
+                st.plotly_chart(group_heatmap, config={'responsive': True})
             
             # Analyze each group
             st.markdown("#### 🔍 Detailed Group Analysis")
@@ -792,7 +792,7 @@ class FeatureRelationshipsComponent:
                         st.write("**📈 Correlation Statistics:**")
                         stats_df = pd.DataFrame([group_stats]).T
                         stats_df.columns = ['Value']
-                        st.dataframe(stats_df, use_container_width=True)
+                        st.dataframe(stats_df, width='stretch')
                     
                     with col2:
                         # Feature-target correlations for ranking
@@ -803,7 +803,7 @@ class FeatureRelationshipsComponent:
                                                    columns=['Feature', 'Target Correlation'])
                             target_df['Abs Correlation'] = target_df['Target Correlation'].abs()
                             target_df = target_df.sort_values('Abs Correlation', ascending=False)
-                            st.dataframe(target_df[['Feature', 'Target Correlation']], use_container_width=True)
+                            st.dataframe(target_df[['Feature', 'Target Correlation']], width='stretch')
                         else:
                             st.info("Target correlations not available (target may not be numeric)")
                     
@@ -830,7 +830,7 @@ class FeatureRelationshipsComponent:
                             })
                         
                         rec_df = pd.DataFrame(rec_analysis)
-                        st.dataframe(rec_df, use_container_width=True)
+                        st.dataframe(rec_df, width='stretch')
                         
                         # Add a simple info note about the methodology (no nested expander)
                         st.info("💡 **Tip:** Refer to the 'Understanding the Recommendation Methodology' section above for details on how these scores are calculated.")
@@ -2301,7 +2301,7 @@ class FeatureRelationshipsComponent:
             title=f"Distribution of samples across {grouping_feature} bins"
         )
         bin_count_chart.update_layout(height=300)
-        st.plotly_chart(bin_count_chart, use_container_width=True)
+        st.plotly_chart(bin_count_chart, config={'responsive': True})
 
         # Return the binned data and the new grouping feature name
         return binned_data, "bin_label", binning_method, num_bins
@@ -2425,7 +2425,7 @@ class FeatureRelationshipsComponent:
         # Display metrics table
         metrics_df = pd.DataFrame(metrics_data).T
         metrics_df.columns = ['Value']
-        st.dataframe(metrics_df, use_container_width=True)
+        st.dataframe(metrics_df, width='stretch')
 
     def _display_statistical_explanation(self, test_type, stats):
         """Display explanation of the statistical test."""
@@ -2687,7 +2687,7 @@ class FeatureRelationshipsComponent:
         })
 
         # Display the per-group statistics
-        st.dataframe(display_df, use_container_width=True)
+        st.dataframe(display_df, width='stretch')
 
         # Add interpretation help
         self._display_group_statistics_interpretation(
@@ -3051,7 +3051,7 @@ class FeatureRelationshipsComponent:
                             # Use regular markdown for proper rendering of bold text and emojis
                             st.markdown(self.get_plot_description(plot_type))
 
-                        st.plotly_chart(plot, use_container_width=True)
+                        st.plotly_chart(plot, config={'responsive': True})
                     # Log visualization generation
                     log_data = {
                         "primary_feature": feature_for_analysis,
@@ -3074,7 +3074,7 @@ class FeatureRelationshipsComponent:
                     # Use regular markdown for proper rendering of bold text and emojis
                     st.markdown(self.get_plot_description(plot_type))
 
-                st.plotly_chart(plot, use_container_width=True)
+                st.plotly_chart(plot, config={'responsive': True})
                 # Log visualization generation
                 log_data = {
                     "primary_feature": feature_for_analysis,

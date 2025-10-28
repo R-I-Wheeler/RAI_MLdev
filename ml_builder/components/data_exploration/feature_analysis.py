@@ -498,21 +498,21 @@ def show_feature_analysis(
         with dist_col1:
             st.write("📊 Feature Distribution")
             stats, dist_fig = analyse_feature_distribution(data, selected_feature, logger)
-            st.plotly_chart(dist_fig, use_container_width=True)
+            st.plotly_chart(dist_fig, config={'responsive': True})
             
             # Display statistics
             st.write("📈 Statistics:")
             stats_df = pd.DataFrame([stats]).T
             stats_df.columns = ['Value']
             stats_df = stats_df[stats_df['Value'].notna()]
-            st.dataframe(stats_df, use_container_width=True)
+            st.dataframe(stats_df, width='stretch')
         
         with dist_col2:
             st.write("🎯 Relationship with Target")
             metrics, target_fig = analyse_feature_target_relationship(
                 data, selected_feature, target_column, is_classification, logger
             )
-            st.plotly_chart(target_fig, use_container_width=True)
+            st.plotly_chart(target_fig, config={'responsive': True})
             
             # Display relationship metrics
             st.write("📊 Relationship Metrics:")
@@ -521,7 +521,7 @@ def show_feature_analysis(
             if display_metrics:  # Only create DataFrame if there are metrics to display
                 metrics_df = pd.DataFrame(display_metrics).T
                 metrics_df.columns = ['Value']
-                st.dataframe(metrics_df, use_container_width=True)
+                st.dataframe(metrics_df, width='stretch')
             
             # Display statistical test explanation if available
             if 'explanation' in metrics:

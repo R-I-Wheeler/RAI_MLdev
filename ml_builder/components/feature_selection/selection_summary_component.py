@@ -144,14 +144,14 @@ class SelectionSummaryComponent:
             continue_enabled = self._check_continue_enabled()
 
             if continue_enabled:
-                if st.button("Model Selection →", type="primary", use_container_width=True):
+                if st.button("Model Selection →", type="primary", width='stretch'):
                     self._handle_stage_completion()
             else:
                 st.button(
                     "Model Selection →",
                     disabled=True,
                     help="Please address any remaining issues before continuing",
-                    use_container_width=True
+                    width='stretch'
                 )
 
     def _check_continue_enabled(self) -> bool:

@@ -151,7 +151,7 @@ def main():
                 st.warning("This will reset all preprocessing changes and restore the dataset to its original state from when you first entered preprocessing.")
                 col1, col2 = st.columns([1, 1])
                 with col1:
-                    if st.button("✅ Confirm Reset", type="secondary", use_container_width=True):
+                    if st.button("✅ Confirm Reset", type="secondary", width='stretch'):
                         # Restore original data from backup
                         if 'preprocessing_original_data' in st.session_state:
                             st.session_state.builder.data = st.session_state.preprocessing_original_data.copy()
@@ -194,7 +194,7 @@ def main():
                         time.sleep(1)
                         st.rerun()
                 with col2:
-                    if st.button("❌ Cancel", use_container_width=True):
+                    if st.button("❌ Cancel", width='stretch'):
                         st.session_state.show_reset_confirmation = False
                         st.rerun()
 
@@ -281,13 +281,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 "Feature Management",
@@ -336,13 +336,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -392,13 +392,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -449,7 +449,7 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
@@ -457,7 +457,7 @@ def main():
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
                         if st.session_state.missing_values_complete:
-                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                                 # Log stage transition
                                 st.session_state.logger.log_stage_transition(
                                     step_sequence[current_step]['label'],
@@ -467,7 +467,7 @@ def main():
                                 st.session_state.scroll_to_top = True
                                 st.rerun()
                         else:
-                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply missing values before continuing", use_container_width=True)
+                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply missing values before continuing", width='stretch')
         
         elif st.session_state.preprocessing_step == 'binning':
             # Log page state when entering binning analysis
@@ -511,13 +511,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -568,13 +568,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -636,7 +636,7 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
@@ -644,7 +644,7 @@ def main():
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
                         if can_proceed:
-                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                                 # Log stage transition
                                 st.session_state.logger.log_stage_transition(
                                     step_sequence[current_step]['label'],
@@ -654,7 +654,7 @@ def main():
                                 st.session_state.scroll_to_top = True
                                 st.rerun()
                         else:
-                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply categorical encoding before continuing", use_container_width=True)
+                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply categorical encoding before continuing", width='stretch')
 
         elif st.session_state.preprocessing_step == 'feature_creation':
             # Log page state when entering feature creation
@@ -712,14 +712,14 @@ def main():
                 with nav_button_cols[0]:
                     if step_info['prev']:
                         if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}",
-                                     use_container_width=True):
+                                     width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
 
                 with nav_button_cols[1]:
                     if step_info['next']:
                         if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →",
-                                     use_container_width=True, on_click=fc_scroll):
+                                     width='stretch', on_click=fc_scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -770,13 +770,13 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", use_container_width=True, on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -827,12 +827,12 @@ def main():
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", use_container_width=True):
+                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
                             st.session_state.preprocessing_step = step_info['prev']
                             st.rerun()
                 
                 with nav_button_cols[1]:
-                    if st.button("Complete Preprocessing →", type="primary", use_container_width=True):
+                    if st.button("Complete Preprocessing →", type="primary", width='stretch'):
                         # Get data quality warnings first for logging
                         warnings = final_review._display_data_quality_warnings()
                         

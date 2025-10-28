@@ -70,7 +70,7 @@ class DataQualityAnalysis:
             # Only show columns with missing values
             missing_df = missing_df[missing_df['Missing Count'] > 0]
             if not missing_df.empty:
-                st.dataframe(missing_df, use_container_width=True)
+                st.dataframe(missing_df, width='stretch')
         
                 col1, col2 = st.columns([2,1])
                 with col1:
@@ -92,7 +92,7 @@ class DataQualityAnalysis:
 
                     st.plotly_chart(
                         missing_analysis["visualisations"]["pattern"],
-                        use_container_width=True
+                        width='stretch'
                     )
                 with col2:
                     # Missing value correlations
@@ -110,7 +110,7 @@ class DataQualityAnalysis:
 
                     st.plotly_chart(
                         missing_analysis["visualisations"]["correlations"],
-                        use_container_width=True
+                        width='stretch'
                     )
                 
                 # Add recommendations

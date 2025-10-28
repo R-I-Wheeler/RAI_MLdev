@@ -805,7 +805,7 @@ def main():
             # Only enable the button if a model has been selected
             button_disabled = not hasattr(st.session_state, 'selected_model_type')
             
-            if st.button("✨ Continue to Model Evaluation", key="bottom_next", use_container_width=True, type="primary", disabled=button_disabled):
+            if st.button("✨ Continue to Model Evaluation", key="bottom_next", width='stretch', type="primary", disabled=button_disabled):
                 st.session_state.logger.log_stage_transition(
                     "MODEL_TRAINING",
                     "MODEL_EVALUATION"

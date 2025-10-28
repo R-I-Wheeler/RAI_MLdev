@@ -152,7 +152,7 @@ def display_classification_visualisations(result):
         st.write("### 🎯 Confusion Matrix")
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.plotly_chart(result["confusion_matrix"], use_container_width=True, key="viz_confusion_matrix_plot")
+            st.plotly_chart(result["confusion_matrix"], config={'responsive': True}, key="viz_confusion_matrix_plot")
         with col2:
             explanation = st.session_state.builder.get_calculation_explanation("confusion_matrix")
             with st.container():
@@ -170,7 +170,7 @@ def display_classification_visualisations(result):
         st.write("### 📈 ROC Curve")
         col1, col2 = st.columns([2, 1])
         with col1:
-            st.plotly_chart(result["roc_curve"], use_container_width=True, key="roc_curve_plot")
+            st.plotly_chart(result["roc_curve"], config={'responsive': True}, key="roc_curve_plot")
         with col2:
             explanation = st.session_state.builder.get_calculation_explanation("roc_curve")
             with st.container():
@@ -209,7 +209,7 @@ def display_classification_visualisations(result):
                         pr_fig = create_precision_recall_curve(y_test_binary, y_prob_binary)
                     else:
                         pr_fig = create_precision_recall_curve(y_test, y_prob)
-                    st.plotly_chart(pr_fig, use_container_width=True, key="pr_curve_plot")
+                    st.plotly_chart(pr_fig, config={'responsive': True}, key="pr_curve_plot")
                 except Exception as e:
                     st.error(f"Unable to generate precision-recall curve: {str(e)}")
             with col2:
@@ -276,7 +276,7 @@ def display_classification_visualisations(result):
                         prob_fig = create_probability_distribution_plot(
                             y_test, y_prob, optimal_threshold, has_optimal_threshold
                         )
-                    st.plotly_chart(prob_fig, use_container_width=True, key="prob_dist_plot")
+                    st.plotly_chart(prob_fig, config={'responsive': True}, key="prob_dist_plot")
                 except Exception as e:
                     st.error(f"Unable to generate probability distribution: {str(e)}")
             with col2:
@@ -365,7 +365,7 @@ def display_classification_visualisations(result):
                     confidence_fig, calibration_info = create_classification_error_by_confidence_plot(y_test, y_pred_cached, y_prob_matrix)
                     
                     if confidence_fig is not None:
-                        st.plotly_chart(confidence_fig, use_container_width=True, key="classification_confidence_error_plot")
+                        st.plotly_chart(confidence_fig, config={'responsive': True}, key="classification_confidence_error_plot")
                         
                         # Display calibration metrics for both binary and multiclass classification
                         if calibration_info is not None:
@@ -531,7 +531,7 @@ def display_classification_visualisations(result):
             try:
                 feature_error_fig = create_classification_confusion_by_features_plot(y_test, y_pred_cached, X_test, model_instance)  # Use cached predictions
                 if feature_error_fig is not None:
-                    st.plotly_chart(feature_error_fig, use_container_width=True, key="classification_feature_error_plot")
+                    st.plotly_chart(feature_error_fig, config={'responsive': True}, key="classification_feature_error_plot")
                 else:
                     st.info("Unable to generate feature-based error analysis (no numeric features available)")
             except Exception as e:
@@ -579,7 +579,7 @@ def display_classification_visualisations(result):
                 feature_names = list(X_test.columns)
                 importance_fig = create_feature_importance_plot(model_instance, feature_names)
                 if importance_fig is not None:
-                    st.plotly_chart(importance_fig, use_container_width=True, key="feature_importance_plot")
+                    st.plotly_chart(importance_fig, config={'responsive': True}, key="feature_importance_plot")
                 else:
                     st.error("Unable to generate feature importance plot")
             with col2:
@@ -695,7 +695,7 @@ def display_regression_visualisations(result):
         col1, col2 = st.columns([2, 1])
         with col1:
             if "prediction_plot" in result and result["prediction_plot"] is not None:
-                st.plotly_chart(result["prediction_plot"], use_container_width=True, key="prediction_plot")
+                st.plotly_chart(result["prediction_plot"], config={'responsive': True}, key="prediction_plot")
             else:
                 st.error("Unable to generate prediction plot")
         with col2:
@@ -725,7 +725,7 @@ def display_regression_visualisations(result):
         
         # Display the residuals plot which contains all four subplots
         if "residuals_plot" in result and result["residuals_plot"] is not None:
-            st.plotly_chart(result["residuals_plot"], use_container_width=True, key="viz_residuals_plot")
+            st.plotly_chart(result["residuals_plot"], config={'responsive': True}, key="viz_residuals_plot")
         else:
             st.error("Unable to generate residuals plots")
             
@@ -855,7 +855,7 @@ def display_regression_visualisations(result):
             try:
                 error_range_fig = create_error_by_prediction_range_plot(y_test, y_pred)
                 if error_range_fig is not None:
-                    st.plotly_chart(error_range_fig, use_container_width=True, key="error_range_plot")
+                    st.plotly_chart(error_range_fig, config={'responsive': True}, key="error_range_plot")
                 else:
                     st.info("Unable to generate error range analysis (insufficient data variation)")
             except Exception as e:
@@ -904,7 +904,7 @@ def display_regression_visualisations(result):
             try:
                 influence_fig = create_cooks_distance_plot(y_test, y_pred, X_test)
                 if influence_fig is not None:
-                    st.plotly_chart(influence_fig, use_container_width=True, key="influence_plot")
+                    st.plotly_chart(influence_fig, config={'responsive': True}, key="influence_plot")
                 else:
                     st.info("Unable to generate influential points analysis")
             except Exception as e:
@@ -1012,7 +1012,7 @@ def display_regression_visualisations(result):
                 styled_df = influential_df.style.apply(highlight_high_influence, residuals=residuals, axis=1)
                 
                 # Display the dataframe
-                st.dataframe(styled_df, use_container_width=True)
+                st.dataframe(styled_df, width='stretch')
                 
                 # Add summary statistics
                 col1, col2, col3 = st.columns(3)
@@ -1069,7 +1069,7 @@ def display_regression_visualisations(result):
                 try:
                     intervals_fig = create_prediction_intervals_plot(model_instance, X_test, y_test, y_pred)
                     if intervals_fig is not None:
-                        st.plotly_chart(intervals_fig, use_container_width=True, key="intervals_plot")
+                        st.plotly_chart(intervals_fig, config={'responsive': True}, key="intervals_plot")
                     else:
                         st.info("Unable to generate prediction intervals for this ensemble model")
                 except Exception as e:
@@ -1130,7 +1130,7 @@ def display_regression_visualisations(result):
                 feature_names = list(X_test.columns)
                 importance_fig = create_feature_importance_plot(model_instance, feature_names)
                 if importance_fig is not None:
-                    st.plotly_chart(importance_fig, use_container_width=True, key="feature_importance_plot")
+                    st.plotly_chart(importance_fig, config={'responsive': True}, key="feature_importance_plot")
                 else:
                     st.error("Unable to generate feature importance plot")
             with col2:

@@ -182,7 +182,7 @@ def main():
 
         # Style and display the results
         styled_results = st.session_state.builder.style_comparison_results(results_df, best_metric)
-        st.dataframe(styled_results, use_container_width=True)
+        st.dataframe(styled_results, width='stretch')
 
     st.write("---")
 

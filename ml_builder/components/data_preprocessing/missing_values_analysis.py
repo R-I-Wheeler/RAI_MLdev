@@ -51,7 +51,7 @@ class MissingValuesAnalysis:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Missing Values", type="primary", use_container_width=True):
+            if st.button("Undo Missing Values", type="primary", width='stretch'):
                 if st.session_state.missing_values_ops_applied:
                     # Restore data to entry state
                     entry_data = st.session_state.missing_values_entry_data
@@ -113,7 +113,7 @@ class MissingValuesAnalysis:
                 width=900,
                 coloraxis_showscale=False
             )
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
         else:
             st.success("No missing values found in the training data! 🎉")
@@ -558,7 +558,7 @@ class MissingValuesAnalysis:
             'Missing Before': [before_data_train[col].isnull().sum() for col in strategy_dict.keys() if col in before_data_train.columns],
             'Missing After': [self.builder.training_data[col].isnull().sum() if col in self.builder.training_data.columns else 0 for col in strategy_dict.keys()]
         })
-        st.dataframe(strategy_df, use_container_width=True)
+        st.dataframe(strategy_df, width='stretch')
         
         # Column distribution changes for non-dropped columns
         for col in strategy_dict:
@@ -581,7 +581,7 @@ class MissingValuesAnalysis:
                                 xaxis_title=col,
                                 yaxis_title="Count"
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                             
                             # Basic stats
                             st.write(f"Mean: {before_data_train[col].mean():.2f}")
@@ -595,9 +595,9 @@ class MissingValuesAnalysis:
                                 value_counts.head(10), 
                                 x=col, 
                                 y='Count',
-                                title=f"{col} Value Counts Before Imputation"
+                            title=f"{col} Value Counts Before Imputation"
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                     
                     with col2:
                         st.write("**After Imputation:**")
@@ -614,7 +614,7 @@ class MissingValuesAnalysis:
                                 xaxis_title=col,
                                 yaxis_title="Count"
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                             
                             # Basic stats
                             st.write(f"Mean: {self.builder.training_data[col].mean():.2f}")
@@ -628,9 +628,9 @@ class MissingValuesAnalysis:
                                 value_counts.head(10), 
                                 x=col, 
                                 y='Count',
-                                title=f"{col} Value Counts After Imputation"
+                            title=f"{col} Value Counts After Imputation"
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
         
         # Testing data impact analysis
         st.write("---")
@@ -673,10 +673,10 @@ class MissingValuesAnalysis:
             
         # Show the actual data
         st.write("### Final Training Data Sample")
-        st.dataframe(self.builder.training_data.head().style.background_gradient(cmap='Blues'), use_container_width=True)
+        st.dataframe(self.builder.training_data.head().style.background_gradient(cmap='Blues'), width='stretch')
         
         st.write("### Final Testing Data Sample")
-        st.dataframe(self.builder.testing_data.head().style.background_gradient(cmap='Blues'), use_container_width=True)
+        st.dataframe(self.builder.testing_data.head().style.background_gradient(cmap='Blues'), width='stretch')
         
         # Log the impact analysis
         st.session_state.logger.log_calculation(

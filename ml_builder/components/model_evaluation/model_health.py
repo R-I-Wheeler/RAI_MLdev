@@ -601,7 +601,7 @@ def display_model_improvements(result, problem_type):
             return ['background-color: #c6efce' if '✅' in row['status'] else 'background-color: #ffc7ce' for _ in row]
         
         styled_df = metrics_df.style.apply(style_status, axis=1)
-        st.dataframe(styled_df, use_container_width=True)
+        st.dataframe(styled_df, width='stretch')
         
         with st.expander("ℹ️ Understanding the Metrics"):
             # Handle both binary and multiclass classification
@@ -905,7 +905,7 @@ def display_model_improvements(result, problem_type):
                 with col1:
                     st.plotly_chart(
                         create_metric_trend_plot(train_data.y, val_data.y, x_values=train_data.x),
-                        use_container_width=True
+                        width='stretch'
                     )
                 with col2:
                     st.markdown("""
@@ -1011,7 +1011,7 @@ def display_model_improvements(result, problem_type):
                                 with gauge_cols[idx]:
                                     st.plotly_chart(
                                         create_threshold_gauge(value, threshold, metric_name),
-                                        use_container_width=True,
+                                        width='stretch',
                                         key=f"gauge_{metric_name.lower().replace(' ', '_')}"
                                     )
                         else:
@@ -1144,7 +1144,7 @@ def display_model_improvements(result, problem_type):
                     with col1:
                         st.plotly_chart(
                             create_metric_comparison_radar(metrics_dict, thresholds_dict),
-                            use_container_width=True,
+                            width='stretch',
                             key="metric_comparison_radar"
                         )
                     with col2:
@@ -1212,7 +1212,7 @@ def display_model_improvements(result, problem_type):
                     with col1:
                         st.plotly_chart(
                             create_metric_comparison_radar(metrics_dict, thresholds_dict),
-                            use_container_width=True,
+                            width='stretch',
                             key="radar_chart"
                         )
                     with col2:

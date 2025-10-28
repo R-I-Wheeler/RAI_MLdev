@@ -259,7 +259,7 @@ def render_individual_prediction_analysis():
                         showlegend=False
                     )
                     
-                    st.plotly_chart(fig, use_container_width=True)
+                    st.plotly_chart(fig, config={'responsive': True})
                 
                 # Add explanation of SHAP vs LIME
                 with st.expander("ℹ️ Understanding SHAP vs LIME Explanations", expanded=False):
@@ -490,7 +490,7 @@ def render_individual_prediction_analysis():
                                 xaxis=dict(title="Prediction Value")
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                         else:
                             st.warning("Waterfall plot not available for this model type")
                     
@@ -640,7 +640,7 @@ def render_individual_prediction_analysis():
                                 )
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                             
                             # Add table showing LIME contributions
                             lime_contributions_df = pd.DataFrame(explanation["individual_explanation"]["lime_contributions"])
@@ -845,7 +845,7 @@ def render_individual_prediction_analysis():
                                 )
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                             
                         else:
                             st.warning("Comparison plot not available")

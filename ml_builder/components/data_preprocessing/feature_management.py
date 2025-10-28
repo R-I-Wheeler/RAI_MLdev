@@ -61,7 +61,7 @@ class FeatureManagementComponent:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Feature Management", type="primary", use_container_width=True):
+            if st.button("Undo Feature Management", type="primary", width='stretch'):
                 if st.session_state.feature_management_ops_applied:
                     # Restore data to entry state
                     self.builder.data = st.session_state.feature_management_entry_data.copy()
@@ -102,7 +102,7 @@ class FeatureManagementComponent:
             'Null Count': self.data.isnull().sum(),
             'Unique Values': [self.data[col].nunique() for col in self.data.columns]
         })
-        st.dataframe(column_info, use_container_width=True)
+        st.dataframe(column_info, width='stretch')
         
         # Type conversion section
         self._render_type_conversion_section()
@@ -245,7 +245,7 @@ class FeatureManagementComponent:
                                 })
                                 st.dataframe(
                                     mapping_df.style.background_gradient(cmap='Blues', axis=0),
-                                    use_container_width=True
+                                    width='stretch'
                                 )
                         else:
                             self.data[col_to_convert] = pd.to_numeric(self.data[col_to_convert])
@@ -510,7 +510,7 @@ class FeatureManagementComponent:
                         before_corr,
                         title="Correlation Matrix Before Removal"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
             
             with col2:
                 st.write("**After Removal:**")
@@ -524,7 +524,7 @@ class FeatureManagementComponent:
                         after_corr,
                         title="Correlation Matrix After Removal"
                     )
-                    st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(scatter_fig, config={'responsive': True})
             
             # Detailed analysis of removed columns
             st.write("**Details of Removed Columns:**")
@@ -537,10 +537,10 @@ class FeatureManagementComponent:
                     # Visualization of removed column
                     if pd.api.types.is_numeric_dtype(before_data[col].dtype):
                         fig = px.histogram(before_data, x=col, title=f"Distribution of {col}")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
                     else:
                         fig = px.bar(before_data[col].value_counts(), title=f"Value Counts of {col}")
-                        st.plotly_chart(fig, use_container_width=True)
+                        st.plotly_chart(fig, config={'responsive': True})
             
             # Show implications
             st.write("**Implications of Column Removal:**")

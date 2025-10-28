@@ -141,7 +141,7 @@ def display_classification_report(result):
         return df.style.format(format_dict).applymap(highlight_performance, subset=style_cols)
     
     # Display the styled dataframe
-    st.dataframe(style_classification_dataframe(class_df_display), use_container_width=True)
+    st.dataframe(style_classification_dataframe(class_df_display), width='stretch')
     
     # Performance legend
     col1, col2 = st.columns([3, 1])
@@ -743,7 +743,7 @@ def display_regression_report(result):
         
         return df.style.apply(highlight_row, axis=1)
     
-    st.dataframe(style_regression_metrics(metrics_df), use_container_width=True, hide_index=True)
+    st.dataframe(style_regression_metrics(metrics_df), width='stretch', hide_index=True)
     
     # Add color coding legend
     st.markdown("""

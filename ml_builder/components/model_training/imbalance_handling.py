@@ -186,7 +186,7 @@ def display_imbalance_analysis_preview(imbalance_analysis):
 
     # Show small distribution chart
     fig = _create_class_distribution_preview_chart(metrics["class_distribution"])
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, config={'responsive': True})
 
     # Explanation of impact
     st.info("""
@@ -417,7 +417,7 @@ def apply_resampling_method(method_name):
                 height=400
             )
 
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, config={'responsive': True})
 
             st.success(f"""
             ✅ **{method_name} Applied Successfully!**

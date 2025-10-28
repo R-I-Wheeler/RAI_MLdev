@@ -1306,7 +1306,7 @@ class FeatureCreationComponent:
         with col2:
             st.write("")
         with col3:
-            if st.button("Undo Feature Creation", type="primary", use_container_width=True):
+            if st.button("Undo Feature Creation", type="primary", width='stretch'):
                 if st.session_state.feature_creation_ops_applied:
                     # Restore data to entry state
                     entry_data = st.session_state.feature_creation_entry_data
@@ -1889,7 +1889,7 @@ class FeatureCreationComponent:
                     # Display statistics
                     st.write("**Value Statistics:**")
                     values_preview = feat_info['values'].describe()
-                    st.dataframe(values_preview, use_container_width=True)
+                    st.dataframe(values_preview, width='stretch')
 
                 with col3:
                     # Display histogram
@@ -1944,7 +1944,7 @@ class FeatureCreationComponent:
                                     x=1.02 if is_multiclass_classification else 0.5
                                 )
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                             
                         else:
                             # For regression: create subplot with histogram and scatter plot
@@ -2003,7 +2003,7 @@ class FeatureCreationComponent:
                             fig.update_yaxes(title_text="Frequency", row=1, col=1)
                             fig.update_yaxes(title_text=self.target_column, row=2, col=1)
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                                 
                     except Exception as e:
                         # Fallback to simple histogram if subplot creation fails
@@ -2018,7 +2018,7 @@ class FeatureCreationComponent:
                                 yaxis_title="Frequency",
                                 height=250
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, config={'responsive': True})
                         except Exception:
                             st.warning("Could not generate histogram for this feature.")
         
@@ -2063,7 +2063,7 @@ class FeatureCreationComponent:
         # Display selection table with checkboxes
         edited_df = st.data_editor(
             selection_df[display_columns + ["feature_name"]],  # Include feature_name but we'll hide it with column_order
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_order=display_columns,  # Only show these columns, hiding feature_name
             column_config={
@@ -2160,7 +2160,7 @@ class FeatureCreationComponent:
         # Display as a styled table
         st.dataframe(
             df, 
-            use_container_width=True,
+            width='stretch',
             height=min(350, 50 + 35 * len(df)),
             column_config={
                 "Rank": st.column_config.NumberColumn(format="%d"),
@@ -2278,7 +2278,7 @@ class FeatureCreationComponent:
         )
         
         # Display the heatmap
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, config={'responsive': True})
         
         # Add information about target inclusion for different problem types
         if not is_regression:

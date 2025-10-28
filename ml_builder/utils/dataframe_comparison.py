@@ -2559,11 +2559,11 @@ class DataframeComparisonComponent:
                             
                             #with col1:
                             #st.write("### Original Dataframe Associations")
-                            #st.plotly_chart(orig_fig, use_container_width=True)
+                            #st.plotly_chart(orig_fig, config={'responsive': True})
                             
                             #with col2:
                             st.write("### Current Dataframe Associations")
-                            st.plotly_chart(mod_fig, use_container_width=True)
+                            st.plotly_chart(mod_fig, config={'responsive': True})
                                 
                     except Exception as e:
                         display_info_message(f"Error analyzing correlations: {str(e)}", "error")
@@ -2720,7 +2720,7 @@ class DataframeComparisonComponent:
                         for fig_idx, fig in enumerate(figures):
                             try:
                                 plot_key = f"new_{feature}_dist_{fig_idx}"
-                                st.plotly_chart(fig, use_container_width=True, key=plot_key)
+                                st.plotly_chart(fig, config={'responsive': True}, key=plot_key)
                             except Exception as e:
                                 st.error(f"Error displaying plot: {str(e)}")
             
@@ -3038,7 +3038,7 @@ class DataframeComparisonComponent:
                             for fig_idx, fig in enumerate(figs_orig):
                                 try:
                                     plot_key = f"dist_change_orig_{feature}_{fig_idx}"
-                                    st.plotly_chart(fig, use_container_width=True, key=plot_key)
+                                    st.plotly_chart(fig, config={'responsive': True}, key=plot_key)
                                 except Exception as e:
                                     st.error(f"Error displaying plot: {str(e)}")
                         
@@ -3052,7 +3052,7 @@ class DataframeComparisonComponent:
                             for fig_idx, fig in enumerate(figs_mod):
                                 try:
                                     plot_key = f"dist_change_mod_{feature}_{fig_idx}"
-                                    st.plotly_chart(fig, use_container_width=True, key=plot_key)
+                                    st.plotly_chart(fig, config={'responsive': True}, key=plot_key)
                                 except Exception as e:
                                     st.error(f"Error displaying plot: {str(e)}")
                                     
