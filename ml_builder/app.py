@@ -1,6 +1,7 @@
 import streamlit as st
 from Builder import Builder, ModelStage
 from utils.logging.logger import MLLogger
+from utils.journey_point_utils import render_journey_point_popover
 
 st.set_page_config(
     page_title="ML Model Development Guide", 
@@ -81,6 +82,10 @@ def create_sidebar_navigation():
 
     # Add reset button at the bottom of sidebar
     #st.sidebar.markdown("---")  # Add separator
+    
+    # Create Journey Point popover in the sidebar
+    render_journey_point_popover()
+
     if st.sidebar.button("🔄 Reset Application"):
         # Log the reset action before clearing state
         if 'logger' in st.session_state:
