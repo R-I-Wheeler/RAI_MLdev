@@ -45,19 +45,14 @@ def render_journey_point_popover():
                 else:
                     tracker = st.session_state.journey_tracker
 
-                    # Prefer to attach to the most recent node for this stage to avoid branching semantics
-                    parent_id: Optional[str] = None
-                    if hasattr(tracker, 'stage_to_latest_node'):
-                        parent_id = tracker.stage_to_latest_node.get(stage_str, tracker.last_node_id)
-                    else:
-                        parent_id = getattr(tracker, 'last_node_id', None)
-
+                    # Let the tracker determine the parent automatically based on stage progression
+                    # The tracker's add_decision method has logic to find the optimal parent
                     tracker.add_decision(
                         stage=stage_str,
                         decision_type="NOTE",
                         description=text,
                         details={"source": "sidebar_popover"},
-                        parent_id=parent_id,
+                        parent_id=None,  # Let tracker auto-determine parent
                     )
 
                     if hasattr(st, "toast"):
