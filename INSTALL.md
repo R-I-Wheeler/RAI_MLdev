@@ -1,5 +1,16 @@
 # ML Builder Installation Guide
 
+## License Notice
+
+**IMPORTANT**: This software is licensed under a **Proprietary Evaluation License**.
+
+- **Free for**: Personal learning and classroom instruction at accredited educational institutions
+- **Evaluation**: Corporate entities may evaluate for 30 days
+- **Commercial use requires**: Separate commercial license
+- **Contact**: richard.wheeler@priosym.com for commercial licensing
+
+See the [LICENSE](LICENSE) file for complete terms and conditions.
+
 ## Prerequisites
 
 - **Python**: 3.8 or higher

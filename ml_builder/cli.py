@@ -1,4 +1,8 @@
 #!/usr/bin/env python
+# Copyright (c) 2025 Richard Wheeler
+# Licensed under the Proprietary Evaluation License
+# See LICENSE file for details
+# For commercial licensing: richard.wheeler@priosym.com
 """
 ML Builder CLI Entry Point
 

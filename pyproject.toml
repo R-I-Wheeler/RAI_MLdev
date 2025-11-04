@@ -3,19 +3,20 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ml-builder"
-version = "1.0.0"
+name = "rai_mldev"
+version = "1.1.0"
 description = "A Streamlit-based ML model development guide promoting responsible AI"
 authors = [{name = "Richard Wheeler"}]
 readme = "README.md"
-license = {text = "MIT"}
+license = {text = "Proprietary"}
 requires-python = ">=3.8"
 keywords = ["machine-learning", "streamlit", "responsible-ai", "model-development"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "License :: Other/Proprietary License",
+    "License :: Free for non-commercial use",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -40,7 +41,7 @@ dependencies = [
     "seaborn>=0.12.0",
     "scipy>=1.9.0",
     "dython>=0.7.3",
-    "imblearn",
+    "imbalanced-learn",
     "optbinning>=0.20.0",
     "streamlit-scroll-to-top",
     "fairlearn>=0.7.0",

@@ -1,3 +1,8 @@
+# Copyright (c) 2025 Richard Wheeler
+# Licensed under the Proprietary Evaluation License
+# See LICENSE file for details
+# For commercial licensing: richard.wheeler@priosym.com
+
 import streamlit as st
 from Builder import Builder, ModelStage
 from utils.logging.logger import MLLogger
@@ -193,7 +198,7 @@ def main():
     st.markdown(
         """
         <div style='text-align: center; color: #666666; padding: 10px;'>
-        <small>Version 1.0.0 | Copyright © 2025, Richard Wheeler. All rights reserved.</small><br>
+        <small>Version 1.1.0 | Copyright © 2025, Richard Wheeler. All rights reserved.</small><br>
         <small>ML Model Development Guide</small>
         </div>
         """,
