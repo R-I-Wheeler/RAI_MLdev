@@ -33,24 +33,12 @@ You can run ML Builder via the CLI after installing the package.
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# Install in editable (dev) mode from repo root
-pip install -e .
+# Install
+pip install rai_mldev
 
 # Launch the application (CLI entry point)
 ml-builder
 ```
-
-Alternate ways to run:
-
-```bash
-# Run via Python module
-python -m ml_builder.cli
-
-# Run Streamlit directly (from the ml_builder/ directory)
-cd ml_builder
-streamlit run app.py
-```
-
 
 ## Sample Datasets
 

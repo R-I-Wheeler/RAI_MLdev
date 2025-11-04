@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rai_mldev"
-version = "1.1.0"
+version = "1.1.1"
 description = "A Streamlit-based ML model development guide promoting responsible AI"
 authors = [{name = "Richard Wheeler"}]
 readme = "README.md"
@@ -57,8 +57,8 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/R-I-Wheeler/ML_Builder_Beta"
-Issues = "https://github.com/R-I-Wheeler/ML_Builder_Beta/issues"
+Homepage = "https://github.com/R-I-Wheeler/RAI_MLdev"
+Issues = "https://github.com/R-I-Wheeler/RAI_MLdev/issues"
 
 [project.scripts]
 ml-builder = "ml_builder.cli:main"

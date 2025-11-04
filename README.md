@@ -118,6 +118,22 @@ Two sample datasets are included:
    - 15+ features including location, size, distance metrics
    - Real-world regression problem with mixed feature types
 
+## Installation and Launch
+
+You can run ML Builder via the CLI after installing the package.
+
+```bash
+# Recommended: create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install 
+pip install rai_mldev 
+
+# Launch the application (CLI entry point)
+ml-builder
+```
+
 ## Technical Dependencies
 
 ### Core Framework
