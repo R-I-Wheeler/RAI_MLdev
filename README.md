@@ -130,8 +130,6 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 # Install 
 pip install rai_mldev 
 
-pip install python-magic-bin # Windows only
-
 # Launch the application (CLI entry point)
 ml-builder
 ```
