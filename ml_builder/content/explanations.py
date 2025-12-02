@@ -207,7 +207,7 @@ CALCULATION_EXPLANATIONS = {
         """,
         "interpretation": """
             **How to Read the Results:**
-            - Diagonal numbers (top-left to bottom-right) show correct predictions
+            - Diagonal numbers (bottom-left to top-right) show correct predictions
             - Other numbers show different types of mistakes
             - Higher numbers on the diagonal is better
             - Look for patterns in the mistakes
