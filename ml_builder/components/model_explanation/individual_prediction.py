@@ -606,20 +606,18 @@ def render_individual_prediction_analysis():
                             lime_df = lime_df.sort_values('Impact', key=abs, ascending=True)
                             
                             # Create the waterfall plot
-                            fig = go.Figure(go.Waterfall(
+                            # Create the bar chart (better for LIME than waterfall as there's no base value)
+                            fig = go.Figure(go.Bar(
                                 name="LIME",
                                 orientation="h",
-                                measure=["relative"] * len(lime_df),
                                 x=lime_df['Impact'],
                                 y=lime_df['Feature'],
                                 text=lime_df['Value'],  # Use the Value column directly
-                                textposition="outside",
-                                connector={"mode": "spanning", "line": {"width": 1, "color": "rgb(63, 63, 63)", "dash": "solid"}},
-                                decreasing={"marker": {"color": "rgba(50, 171, 96, 0.7)"}},  # Green for negative impact
-                                increasing={"marker": {"color": "rgba(219, 64, 82, 0.7)"}},  # Red for positive impact
+                                textposition="auto",
+                                marker_color=['rgba(219, 64, 82, 0.7)' if x > 0 else 'rgba(50, 171, 96, 0.7)' for x in lime_df['Impact']],
                                 hovertemplate="<b>%{y}</b><br>" +
                                             "Impact: %{x:.4f}<br>" +
-                                            "Value: %{text}<br>" +  # Changed "Range" to "Value" to match the table
+                                            "Value: %{text}<br>" +
                                             "<extra></extra>"
                             ))
                             
