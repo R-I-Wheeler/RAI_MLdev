@@ -591,5 +591,423 @@ CALCULATION_EXPLANATIONS = {
             - Select model for hyperparameter tuning
             - Factor in interpretability and computational requirements
         """
+    },
+    "precision_recall_curve": {
+        "method": """
+            **Precision-Recall Curve**
+            - Shows the trade-off between precision and recall for different decision thresholds.
+            - **X-axis (Recall)**: How many actual positive cases the model finds
+            - **Y-axis (Precision)**: How accurate the model is when it predicts positive
+            - **AP Score**: Average Precision - summarizes the curve (higher is better)
+            - **Red dashed line**: Random classifier baseline
+        """,
+        "interpretation": """
+            **Key Points:**
+            - **High precision, low recall**: Model is very accurate but misses many positive cases
+            - **Low precision, high recall**: Model finds most positive cases but makes many false predictions
+            - **Curve close to top-right**: Excellent performance
+            - **Curve close to baseline**: Poor performance
+
+            **When to use:**
+            - Imbalanced datasets (better than ROC curve)
+            - When false positives are costly
+            - When you need to understand precision-recall trade-offs
+
+            **What good looks like:**
+            - Curve stays close to the top of the plot
+            - AP score > 0.7 is generally good
+            - Significantly above the red baseline
+        """
+    },
+    "probability_distribution_binary": {
+        "method": """
+            **Probability Distribution**
+            - Shows how confident the model is in its predictions for each class.
+            - **Blue bars**: Distribution for actual negative class (0)
+            - **Red bars**: Distribution for actual positive class (1)
+            - **X-axis**: Prediction probability (0 = confident negative, 1 = confident positive)
+            - **Black dashed line**: Default decision threshold (0.5)
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What good separation looks like:**
+            - Blue bars clustered near 0 (model confident about negatives)
+            - Red bars clustered near 1 (model confident about positives)
+            - Minimal overlap between the two distributions
+
+            **What poor separation looks like:**
+            - Both distributions clustered around 0.5
+            - Heavy overlap between blue and red bars
+            - Similar shapes for both classes
+
+            **How to use this:**
+            - Well-separated distributions → model has learned good decision boundaries
+            - Overlapping distributions → model struggles to distinguish classes
+            - Can help identify optimal probability thresholds
+            - Shows model confidence levels
+        """
+    },
+    "probability_distribution_multiclass": {
+        "method": """
+            **Confidence Distribution**
+            - Shows how confident the model is when making predictions for each true class.
+            - **Each subplot**: One true class (what the samples actually are)
+            - **Green bars**: Correct predictions (model got it right)
+            - **Red bars**: Incorrect predictions (model got it wrong)
+            - **X-axis**: Model confidence level (0 = uncertain, 1 = very confident)
+            - **Accuracy %**: Shown in top-right corner of each subplot
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What good performance looks like:**
+            - **Green bars on the right**: Correct predictions with high confidence (> 0.8)
+            - **Red bars on the left**: Incorrect predictions with low confidence (< 0.6)
+            - **High accuracy %**: Most predictions are correct for this class
+
+            **What poor performance looks like:**
+            - **Red bars on the right**: Incorrect but confident predictions (dangerous!)
+            - **Green bars in middle**: Correct but uncertain predictions
+            - **Low accuracy %**: Model struggles with this class
+
+            **How to interpret each subplot:**
+            - **True Class X**: All samples that are actually class X
+            - **Green distribution**: When model correctly identifies class X samples
+            - **Red distribution**: When model incorrectly predicts something else
+            - **Ideal pattern**: Green bars clustered right (confident + correct), red bars clustered left (uncertain + wrong)
+
+            **Actionable insights:**
+            - **Classes with low accuracy**: Need more training data or feature engineering
+            - **Confident but wrong (red on right)**: Review those specific samples for labeling errors
+            - **Uncertain but right (green in middle)**: Consider confidence thresholds for decision-making
+        """
+    },
+    "error_by_confidence": {
+        "method": """
+            **Error Rate by Confidence**
+            - Shows how often the model makes mistakes based on how confident it is, with trend analysis and calibration metrics.
+            - **Blue bars**: Error rate for each confidence level
+            - **Red trend line**: Overall relationship pattern
+            - **Calibration metrics**: How well probabilities match reality
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What good calibration looks like:**
+            - **Trend line slopes downward**: Higher confidence → Lower error rate
+            - **Low Brier Score** (< 0.1): Accurate probability predictions
+            - **Low ECE** (< 0.05): Predicted probabilities match actual outcomes
+
+            **What poor calibration looks like:**
+            - **Flat trend line**: Confidence doesn't correlate with accuracy
+            - **High Brier Score** (> 0.2): Inaccurate probability predictions
+            - **High ECE** (> 0.1): Model overconfident or underconfident
+
+            **Calibration Metrics Explained:**
+            - **Brier Score**: Overall accuracy of probability predictions (0 = perfect)
+            - **Expected Calibration Error (ECE)**: How much predicted probabilities deviate from actual frequencies
+
+            **Business Implications:**
+            - **Well-calibrated**: Can trust probability thresholds for decisions
+            - **Overconfident**: Lower thresholds for high-stakes decisions
+            - **Underconfident**: Can be more aggressive with predictions
+            - **Poor calibration**: Consider probability calibration techniques
+        """
+    },
+    "error_by_feature": {
+        "method": """
+            **Error by Feature Ranges**
+            - Shows if the model struggles more in certain regions of your feature space.
+            - **X-axis**: Feature value ranges
+            - **Y-axis**: Error rate in that range
+            - **Bars**: How often the model is wrong in each range
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What to look for:**
+            - **Even error rates**: Model performs consistently across feature ranges
+            - **High error spikes**: Model struggles in specific ranges
+            - **Edge effects**: Higher errors at extreme values
+
+            **Common patterns:**
+            - **Data sparsity**: Higher errors where training data is sparse
+            - **Class imbalance**: Higher errors for underrepresented regions
+            - **Non-linear relationships**: Errors in regions where linear assumptions break down
+
+            **How to improve:**
+            - Collect more data in high-error regions
+            - Consider feature transformations
+            - Review outliers in problematic ranges
+            - Adjust model complexity for those regions
+        """
+    },
+    "error_by_prediction_range": {
+        "method": """
+            **Error by Prediction Range**
+            - Shows how model accuracy varies across different prediction ranges.
+            - **X-axis**: Prediction value ranges (grouped into bins)
+            - **Y-axis**: Absolute error magnitude
+            - **Box plots**: Distribution of errors within each range
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What good performance looks like:**
+            - Similar box heights across all ranges
+            - Low median error (box center) in all ranges
+            - Few outliers in any range
+
+            **What poor performance looks like:**
+            - Much higher errors in certain ranges
+            - Many outliers in specific ranges
+            - Systematic patterns (increasing/decreasing errors)
+
+            **How to use this:**
+            - Identify where your model struggles most
+            - Detect if model performs worse for high/low values
+            - Guide data collection efforts
+            - Inform confidence in predictions by range
+
+            **Common patterns:**
+            - **Heteroscedasticity**: Errors increase with prediction values
+            - **Range limitation**: Poor performance at extreme values
+            - **Data sparsity**: High errors where training data is sparse
+        """
+    },
+    "influential_points": {
+        "method": """
+            **Influential Points Analysis**
+            - Identifies data points that have unusual impact on the model.
+            - **X-axis**: Sample index (data point number)
+            - **Y-axis**: Influence score (higher = more influential)
+            - **Color**: Intensity shows influence level
+            - **Red line**: High influence threshold
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What high influence means:**
+            - Points that strongly affect model fit
+            - Combination of unusual feature values and large residuals
+            - May be outliers or important edge cases
+
+            **How to interpret:**
+            - **Points above red line**: Potentially problematic
+            - **Scattered low values**: Normal, healthy pattern
+            - **Few high spikes**: May indicate data quality issues
+
+            **What to do with influential points:**
+            1. **Investigate**: Are these data entry errors?
+            2. **Domain check**: Do they represent valid but rare cases?
+            3. **Consider removal**: If they're errors or not representative
+            4. **Collect more data**: In regions with high influence
+
+            **Important notes:**
+            - Not all influential points are bad
+            - Some may represent important edge cases
+            - Always investigate before removing data
+        """
+    },
+    "residuals_analysis": {
+        "method": """
+            **Residuals** are the differences between actual and predicted values. They help us understand:
+            - How well our model fits the data
+            - Whether our model's assumptions are met
+            - Where our model makes the biggest errors
+            - If our model is biased in certain regions
+        """,
+        "interpretation": """
+            **Good Model Characteristics:**
+            1. Random scatter in Residuals vs Predicted
+            2. Normal distribution of residuals
+            3. Points following Q-Q line
+            4. Constant spread in Scale-Location
+
+            **Common Issues:**
+            1. **Non-linearity**
+                - Curved patterns in residual plots
+                - Solution: Try non-linear transformations
+
+            2. **Heteroscedasticity**
+                - Funnel shapes in residual plots
+                - Solution: Try variable transformation
+
+            3. **Non-normal Errors**
+                - Skewed distribution
+                - Q-Q plot deviations
+                - Solution: Check outliers, try transformations
+
+            4. **Outliers**
+                - Points far from others
+                - Solution: Investigate and possibly remove
+
+            **Next Steps if Issues Found:**
+            - Review feature engineering
+            - Consider data transformations
+            - Check for outliers
+            - Try different model types
+        """
+    },
+    "influential_points_table": {
+        "method": """
+            **Understanding the Influential Points Table**
+            - **Sample_Index**: Original position in your test dataset
+            - **Actual_Value**: True target value for this sample
+            - **Predicted_Value**: Model's prediction for this sample
+            - **Residual**: Difference between actual and predicted (error)
+            - **Influence_Score**: Calculated influence measure (higher = more influential)
+            - **Feature Columns**: Values of the most important features for these samples
+        """,
+        "interpretation": """
+            **Color Coding:**
+            - 🔴 **Light Red**: Influence Score column (these are all high influence points)
+            - 🟡 **Light Yellow**: Residuals that are particularly large (> 2 standard deviations)
+
+            **What to Look For:**
+            - **Unusual feature combinations**: Do these samples have strange feature values?
+            - **Data entry errors**: Are there any obviously incorrect values?
+            - **Edge cases**: Do these represent rare but valid scenarios?
+            - **Patterns**: Are the influential points clustered in certain feature ranges?
+
+            **Next Steps:**
+            1. **Investigate each point**: Look at the feature values and check if they make sense
+            2. **Domain validation**: Consult with subject matter experts about these cases
+            3. **Data quality check**: Verify these aren't data collection or entry errors
+            4. **Consider action**: Decide whether to keep, correct, or remove these points
+        """
+    },
+    "prediction_intervals": {
+        "method": """
+            **Prediction Intervals**
+            - Shows the uncertainty in model predictions using ensemble variation.
+            - **Green shaded area**: 90% prediction interval
+            - **Red dots**: Actual values
+            - **Blue dots**: Model predictions
+            - **X-axis**: Sample index (sorted by actual value)
+        """,
+        "interpretation": """
+            **Key Points:**
+
+            **What good intervals look like:**
+            - Most actual values (red dots) fall within green area
+            - Interval width reflects true uncertainty
+            - Predictions (blue dots) close to actual values
+
+            **What poor intervals look like:**
+            - Many actual values outside green area
+            - Intervals too narrow or too wide
+            - Systematic bias in predictions
+
+            **How to use this:**
+            - **Narrow intervals**: High model confidence
+            - **Wide intervals**: High uncertainty - be cautious
+            - **Values outside intervals**: May need investigation
+            - **Systematic patterns**: Suggest model improvements needed
+
+            **Business applications:**
+            - Risk assessment for predictions
+            - Setting safety margins
+            - Identifying when to seek additional information
+            - Communicating uncertainty to stakeholders
+
+            **Technical notes:**
+            - Available for ensemble models (Random Forest, Extra Trees) and boosting models (XGBoost, LightGBM, Gradient Boosting)
+            - Traditional ensembles: Based on variation across individual estimators
+            - Boosting models: Generated using prediction variations or input perturbations
+            - 90% interval means 90% of predictions should fall within bounds
+        """
+    },
+    "residuals_vs_predicted": {
+        "method": """
+            **Residuals vs Predicted**
+            - Shows the relationship between model predictions and errors.
+        """,
+        "interpretation": """
+            **What to Look For:**
+            - Points should scatter randomly around the horizontal line at y=0
+            - No clear patterns or trends
+            - Even spread above and below the line
+
+            **Red Flags:**
+            - Curved patterns suggest non-linear relationships
+            - Funnel shapes indicate heteroscedasticity
+            - Clusters suggest missing variables
+            - Outliers far from y=0
+
+            **Ideal Pattern:**
+            Random scatter with:
+            - Even spread vertically
+            - No obvious patterns
+            - Most points between -2 and 2 on y-axis
+        """
+    },
+    "residuals_qq_plot": {
+        "method": """
+            **Normal Q-Q Plot**
+            - Compares the distribution of errors to a perfect normal distribution.
+        """,
+        "interpretation": """
+            **What to Look For:**
+            - Points following the diagonal line
+            - Minimal deviation from line
+            - Even spread along the line
+
+            **Red Flags:**
+            - S-shaped curve
+            - Points far from diagonal
+            - Heavy tails (ends deviate)
+
+            **Why It Matters:**
+            - Tests normality assumption
+            - Shows outlier impact
+            - Identifies systematic deviations
+        """
+    },
+    "residuals_distribution": {
+        "method": """
+            **Residual Distribution**
+            - Shows the frequency of different error sizes.
+        """,
+        "interpretation": """
+            **What to Look For:**
+            - Bell-shaped (normal) distribution
+            - Centered at zero
+            - Symmetric spread
+
+            **Red Flags:**
+            - Skewness (leaning left or right)
+            - Multiple peaks
+            - Long tails
+            - Center not at zero
+
+            **Why It Matters:**
+            - Shows if errors are normally distributed
+            - Helps identify bias in predictions
+            - Validates regression assumptions
+        """
+    },
+    "residuals_scale_location": {
+        "method": """
+            **Scale-Location Plot**
+            - Shows if the spread of errors changes with prediction value.
+        """,
+        "interpretation": """
+            **What to Look For:**
+            - Horizontal line with constant spread
+            - Random scatter of points
+            - No obvious patterns
+
+            **Red Flags:**
+            - Funnel shapes
+            - Increasing/decreasing spread
+            - Clusters or patterns
+
+            **Why It Matters:**
+            - Tests homoscedasticity
+            - Shows if error variance is constant
+            - Identifies prediction reliability
+        """
     }
 }
