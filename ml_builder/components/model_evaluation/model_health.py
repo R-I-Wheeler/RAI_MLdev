@@ -905,7 +905,7 @@ def display_model_improvements(result, problem_type):
                 with col1:
                     st.plotly_chart(
                         create_metric_trend_plot(train_data.y, val_data.y, x_values=train_data.x),
-                        width='stretch'
+                        use_container_width=True
                     )
                 with col2:
                     st.markdown("""
@@ -1011,7 +1011,7 @@ def display_model_improvements(result, problem_type):
                                 with gauge_cols[idx]:
                                     st.plotly_chart(
                                         create_threshold_gauge(value, threshold, metric_name),
-                                        width='stretch',
+                                        use_container_width=True,
                                         key=f"gauge_{metric_name.lower().replace(' ', '_')}"
                                     )
                         else:
@@ -1144,7 +1144,7 @@ def display_model_improvements(result, problem_type):
                     with col1:
                         st.plotly_chart(
                             create_metric_comparison_radar(metrics_dict, thresholds_dict),
-                            width='stretch',
+                            use_container_width=True,
                             key="metric_comparison_radar"
                         )
                     with col2:
@@ -1212,7 +1212,7 @@ def display_model_improvements(result, problem_type):
                     with col1:
                         st.plotly_chart(
                             create_metric_comparison_radar(metrics_dict, thresholds_dict),
-                            width='stretch',
+                            use_container_width=True,
                             key="radar_chart"
                         )
                     with col2:
