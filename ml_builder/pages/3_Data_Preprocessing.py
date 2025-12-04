@@ -111,8 +111,8 @@ def main():
             4. Handle missing values
             5. Apply variable binning strategies
             6. Handle outliers
-            7. Create new features from existing numeric features
-            8. Handle categorical variables
+            7. Handle categorical variables
+            8. Create new features from existing numeric features
             9. Optimise feature datatypes for memory efficiency
             10. Review your dataset
             
