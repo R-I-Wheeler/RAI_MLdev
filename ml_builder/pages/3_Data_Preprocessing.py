@@ -112,7 +112,7 @@ def main():
             5. Apply variable binning strategies
             6. Handle outliers
             7. Handle categorical variables
-            8. Create new features from existing numeric features
+            8. Create new features from existing numeric features (optional)
             9. Optimise feature datatypes for memory efficiency
             10. Review your dataset
             
