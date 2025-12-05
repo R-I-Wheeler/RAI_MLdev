@@ -561,18 +561,13 @@ Parameter search is the process of finding the best combination of settings for 
 
 #### Two Main Approaches:
 
-**1. Grid Search** 🔍
-- Tests every possible combination of parameters you specify
-- More thorough but can be very slow for many parameters
-- Best when you have a small number of parameters to tune
-
-**2. Random Search** 🎲
+**1. Random Search** 🎲
 - Randomly samples parameter combinations within the ranges you specify
 - Much faster than grid search
 - Often finds good results with fewer iterations
 - Best when you have many parameters or want faster results
 
-**3. Optuna (Advanced)** 🚀
+**2. Optuna (Advanced)** 🚀
 - Uses smart algorithms to learn from previous trials
 - Focuses search on promising areas
 - Most efficient for complex parameter spaces
