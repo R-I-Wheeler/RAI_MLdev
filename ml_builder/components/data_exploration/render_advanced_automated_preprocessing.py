@@ -203,14 +203,23 @@ def render_advanced_automated_preprocessing():
 
     with col1:
         if advanced_auto_preprocess_enabled:
-            auto_select_top_features = st.slider(
-                "Number of engineered features to create",
-                min_value=0,
-                max_value=20,
-                value=10,
-                help="Number of top-scoring engineered features to automatically add (0 to skip feature creation)",
-                key="advanced_auto_select_top_features"
+            use_feature_creation = st.checkbox(
+                "Enable Feature Creation",
+                value=False,
+                help="Use feature creation to create new features from existing data",
+                key="advanced_auto_use_feature_creation"
             )
+            if use_feature_creation:
+                auto_select_top_features = st.slider(
+                    "Number of engineered features to create",
+                    min_value=0,
+                    max_value=20,
+                    value=10,
+                    help="Number of top-scoring engineered features to automatically add (0 to skip feature creation)",
+                    key="advanced_auto_select_top_features"
+                )
+            else:
+                auto_select_top_features = 0
 
             show_analysis = st.checkbox(
                 "Show detailed step-by-step analysis",
