@@ -625,6 +625,11 @@ def main():
                     }
                     div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
                         width: 100%;
+                        background-color: #f0f2f6;
+                        border: 1px solid #e0e0e0;
+                    }
+                    div[data-testid="stHorizontalBlock"] > div:nth-child(3) button {
+                        width: 100%;
                         background-color: #FF4B4B;
                         color: white;
                     }
@@ -633,7 +638,7 @@ def main():
                     unsafe_allow_html=True
                 )
                 
-                nav_button_cols = st.columns([1, 1])
+                nav_button_cols = st.columns([1, 1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
                         if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
@@ -641,6 +646,18 @@ def main():
                             st.rerun()
                 
                 with nav_button_cols[1]:
+                     if st.button("Skip Feature Creation ↠", width='stretch', help="Skip feature creation and go directly to data types"):
+                        # Log stage transition
+                        st.session_state.logger.log_stage_transition(
+                            step_sequence[current_step]['label'],
+                            "Data Types"
+                        )
+                        st.session_state.skipped_feature_creation = True
+                        st.session_state.preprocessing_step = 'data_types'
+                        st.session_state.scroll_to_top = True
+                        st.rerun()
+
+                with nav_button_cols[2]:
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
                         if can_proceed:
@@ -650,6 +667,7 @@ def main():
                                     step_sequence[current_step]['label'],
                                     step_sequence[step_info['next']]['label']
                                 )
+                                st.session_state.skipped_feature_creation = False
                                 st.session_state.preprocessing_step = step_info['next']
                                 st.session_state.scroll_to_top = True
                                 st.rerun()
@@ -725,6 +743,7 @@ def main():
                                 step_sequence[current_step]['label'],
                                 step_sequence[step_info['next']]['label']
                             )
+                            st.session_state.skipped_feature_creation = False
                             st.session_state.preprocessing_step = step_info['next']
                             st.session_state.scroll_to_top = True
                             st.rerun()
@@ -769,10 +788,17 @@ def main():
                 
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
-                    if step_info['prev']:
-                        if st.button(f"← Back to {step_sequence[step_info['prev']]['label']}", width='stretch'):
-                            st.session_state.preprocessing_step = step_info['prev']
-                            st.rerun()
+                    # Determine back target based on skip flag
+                    back_target = 'feature_creation'
+                    back_label = 'Feature Creation'
+                    
+                    if st.session_state.get('skipped_feature_creation', False):
+                        back_target = 'categorical'
+                        back_label = 'Categorical Features'
+                        
+                    if st.button(f"← Back to {back_label}", width='stretch'):
+                        st.session_state.preprocessing_step = back_target
+                        st.rerun()
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
