@@ -13,6 +13,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+from datetime import datetime
 from fairlearn.metrics import (
     MetricFrame,
     selection_rate,
@@ -165,6 +166,903 @@ def get_accessible_color_palette():
         'bad': '#DC143C',      # Crimson
         'neutral': '#4682B4'   # Steel Blue
     }
+
+def auto_bin_high_cardinality_feature(feature_data, feature_name, n_bins=6, min_group_size=10):
+    """
+    Automatically bin a high-cardinality feature into meaningful groups.
+    
+    This function intelligently groups features with many unique values into fewer
+    categories for better fairness analysis interpretability and statistical reliability.
+    
+    Args:
+        feature_data (pd.Series): The feature column to bin
+        feature_name (str): Name of the feature
+        n_bins (int): Target number of bins (default 6)
+        min_group_size (int): Minimum samples per group (default 10)
+    
+    Returns:
+        tuple: (binned_series, bin_info_dict)
+            - binned_series: pd.Series with binned values
+            - bin_info_dict: Dictionary with binning metadata
+    """
+    
+    # Determine if feature is numeric or categorical
+    is_numeric = pd.api.types.is_numeric_dtype(feature_data)
+    n_unique = feature_data.nunique()
+    
+    bin_info = {
+        'original_feature': feature_name,
+        'binning_method': None,
+        'n_original_groups': n_unique,
+        'n_final_groups': 0,
+        'bin_labels': {},
+        'was_binned': False
+    }
+    
+    # If already has few groups, don't bin
+    if n_unique <= 15:
+        bin_info['was_binned'] = False
+        return feature_data, bin_info
+    
+    binned_data = feature_data.copy()
+    
+    try:
+        if is_numeric:
+            # Numeric feature: use quantile-based binning
+            bin_info['binning_method'] = 'quantile'
+            
+            # Special handling for age-like features
+            # Special handling for age-like features
+            # Check if it looks like age (positive values, reasonable range for human age)
+            min_val = feature_data.min()
+            max_val = feature_data.max()
+            
+            if 'age' in feature_name.lower() and min_val >= -1 and max_val <= 125:
+                # Use domain-appropriate age ranges
+                bins = [0, 18, 25, 35, 45, 55, 65, 100]
+                labels = ['<18', '18-24', '25-34', '35-44', '45-54', '55-64', '65+']
+                try:
+                    binned_data = pd.cut(feature_data, bins=bins, labels=labels, include_lowest=True)
+                    
+                    # Convert to strings and handle any NaNs (out of range values)
+                    # We convert categorical to object, fill NaNs, and ensure all are strings
+                    binned_data = binned_data.astype(object)
+                    binned_data = binned_data.fillna('Unknown')
+                    binned_data = binned_data.astype(str)
+                    
+                    bin_info['binning_method'] = 'age_ranges'
+                    bin_info['bin_labels'] = {label: f"{feature_name}: {label}" for label in labels}
+                    bin_info['bin_labels']['Unknown'] = f"{feature_name}: Unknown"
+                except Exception:
+                    # Fall back to quantile if age binning fails
+                    pass
+            
+            # If age binning didn't work or not an age feature, use quantile binning
+            if bin_info['binning_method'] == 'quantile':
+                # Use quantile-based binning for roughly equal sample sizes
+                try:
+                    binned_data, bin_edges = pd.qcut(
+                        feature_data, 
+                        q=n_bins, 
+                        labels=False, 
+                        duplicates='drop',
+                        retbins=True
+                    )
+                    
+                    # Create readable labels
+                    labels = []
+                    for i in range(len(bin_edges) - 1):
+                        lower = bin_edges[i]
+                        upper = bin_edges[i + 1]
+                        label = f"{lower:.1f}-{upper:.1f}"
+                        labels.append(label)
+                        bin_info['bin_labels'][i] = f"{feature_name}: {label}"
+                    
+                    # Map numeric bins to labels and ensure they're strings
+                    binned_data = binned_data.map(lambda x: str(labels[int(x)]) if pd.notna(x) else 'Unknown')
+                    
+                except Exception as e:
+                    # If quantile binning fails, fall back to equal-width
+                    try:
+                        binned_data = pd.cut(feature_data, bins=n_bins, labels=False, include_lowest=True)
+                        binned_data = binned_data.map(lambda x: f"Bin {int(x)+1}" if pd.notna(x) else 'Unknown')
+                        bin_info['binning_method'] = 'equal_width'
+                    except Exception:
+                        # If all binning fails, return original data
+                        bin_info['was_binned'] = False
+                        return feature_data, bin_info
+        
+        else:
+            # Categorical feature: group by frequency
+            bin_info['binning_method'] = 'frequency'
+            
+            # Get value counts
+            value_counts = feature_data.value_counts()
+            
+            # Keep top (n_bins - 1) categories, group rest as 'Other'
+            top_categories = value_counts.head(n_bins - 1).index.tolist()
+            
+            # Create binned version and ensure all values are strings for consistency
+            binned_data = feature_data.apply(
+                lambda x: str(x) if x in top_categories else 'Other'
+            )
+            
+            # Create labels
+            for cat in top_categories:
+                bin_info['bin_labels'][cat] = f"{feature_name}: {cat}"
+            bin_info['bin_labels']['Other'] = f"{feature_name}: Other"
+        
+        # Update bin info
+        bin_info['n_final_groups'] = binned_data.nunique()
+        bin_info['was_binned'] = True
+        
+        # Check if any groups are too small
+        group_sizes = binned_data.value_counts()
+        if group_sizes.min() < min_group_size:
+            bin_info['warning'] = f"Some groups have fewer than {min_group_size} samples"
+        
+        return binned_data, bin_info
+    
+    except Exception as e:
+        # If binning fails, return original data
+        bin_info['was_binned'] = False
+        bin_info['error'] = str(e)
+        return feature_data, bin_info
+
+def suggest_binning_strategy(feature_data, feature_name):
+    """
+    Analyze a feature and suggest optimal binning strategy with preview.
+    
+    This educational function helps users understand how to best group
+    high-cardinality features for fairness analysis.
+    
+    Args:
+        feature_data (pd.Series): The feature column to analyze
+        feature_name (str): Name of the feature
+    
+    Returns:
+        dict: Dictionary with binning recommendations and preview
+    """
+    
+    is_numeric = pd.api.types.is_numeric_dtype(feature_data)
+    n_unique = feature_data.nunique()
+    
+    recommendations = {
+        'feature_name': feature_name,
+        'n_unique': n_unique,
+        'is_numeric': is_numeric,
+        'suggested_method': None,
+        'suggested_bins': None,
+        'reasoning': None,
+        'preview': None
+    }
+    
+    if n_unique <= 15:
+        recommendations['suggested_method'] = 'none'
+        recommendations['reasoning'] = f"{feature_name} has {n_unique} groups, which is manageable for analysis."
+        return recommendations
+    
+    if is_numeric:
+        # Analyze numeric distribution
+        min_val = feature_data.min()
+        max_val = feature_data.max()
+        median_val = feature_data.median()
+        
+        # Check if it looks like age
+        if 'age' in feature_name.lower() or (min_val >= 0 and max_val <= 120):
+            recommendations['suggested_method'] = 'age_ranges'
+            recommendations['suggested_bins'] = ['<18', '18-24', '25-34', '35-44', '45-54', '55-64', '65+']
+            recommendations['reasoning'] = (
+                f"{feature_name} appears to be age-related. Using standard age brackets "
+                "provides interpretable groups aligned with life stages."
+            )
+        else:
+            recommendations['suggested_method'] = 'quantile'
+            recommendations['suggested_bins'] = 6
+            recommendations['reasoning'] = (
+                f"{feature_name} is numeric with {n_unique} unique values. "
+                "Quantile-based binning creates groups with roughly equal sample sizes, "
+                "which is good for statistical reliability."
+            )
+        
+        # Create preview
+        binned_preview, _ = auto_bin_high_cardinality_feature(feature_data, feature_name)
+        preview_counts = binned_preview.value_counts().sort_index()
+        recommendations['preview'] = preview_counts.to_dict()
+    
+    else:
+        # Categorical feature
+        value_counts = feature_data.value_counts()
+        top_5 = value_counts.head(5)
+        
+        recommendations['suggested_method'] = 'frequency'
+        recommendations['suggested_bins'] = f"Top 5 categories + Other"
+        recommendations['reasoning'] = (
+            f"{feature_name} is categorical with {n_unique} unique values. "
+            "Keeping the most frequent categories and grouping rare ones as 'Other' "
+            "maintains interpretability while ensuring adequate sample sizes."
+        )
+        
+        # Create preview
+        recommendations['preview'] = {
+            'top_categories': top_5.to_dict(),
+            'other_count': value_counts.iloc[5:].sum() if len(value_counts) > 5 else 0
+        }
+    
+    return recommendations
+
+def export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='json'):
+    """
+    Export fairness analysis results in various formats.
+    
+    Args:
+        fairness_results (dict): Results from analyse_model_fairness()
+        problem_type (str): Type of ML problem
+        columns_to_analyse (list): List of analyzed features
+        format (str): Export format - 'json', 'html', or 'markdown'
+    
+    Returns:
+        str: Formatted export content
+    """
+    from datetime import datetime
+    
+    fairness_score = fairness_results.get("fairness_score", None)
+    
+    # Use active threshold from session if available
+    try:
+        threshold_active = getattr(st.session_state, 'fairness_threshold', FAIRNESS_THRESHOLD)
+    except Exception:
+        threshold_active = FAIRNESS_THRESHOLD
+    
+    if format == 'json':
+        import json
+        
+        # Helper function to convert numpy types to native Python types
+        def convert_to_native(obj):
+            """Recursively convert numpy types to native Python types for JSON serialization."""
+            if isinstance(obj, dict):
+                return {k: convert_to_native(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_to_native(item) for item in obj]
+            elif isinstance(obj, (np.integer, np.int64, np.int32)):
+                return int(obj)
+            elif isinstance(obj, (np.floating, np.float64, np.float32)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, np.bool_):
+                return bool(obj)
+            elif pd.isna(obj):
+                return None
+            else:
+                return obj
+        
+        # Create clean JSON export
+        export_data = {
+            'export_metadata': {
+                'timestamp': datetime.now().isoformat(),
+                'problem_type': problem_type,
+                'analysis_version': '1.0'
+            },
+            'overall_fairness': {
+                'score': float(fairness_score) if fairness_score is not None else None,
+                'threshold': float(threshold_active),
+                'status': 'fair' if fairness_score and fairness_score >= threshold_active else 'biased'
+            },
+            'features_analyzed': columns_to_analyse,
+            'feature_scores': {
+                feat: {
+                    'overall_score': float(score) if score is not None else None,
+                    'summary': convert_to_native(fairness_results.get("feature_summaries", {}).get(feat, {}))
+                }
+                for feat, score in fairness_results.get("column_scores", {}).items()
+                if score is not None
+            },
+            'bias_detected': bool(fairness_results.get("bias_detected", False)),
+            'bias_types': fairness_results.get("bias_types", [])
+        }
+        
+        # Convert entire structure to ensure all numpy types are handled
+        export_data = convert_to_native(export_data)
+        
+        return json.dumps(export_data, indent=2)
+    
+    elif format == 'html':
+        # Create HTML report
+        html_content = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Fairness Analysis Report</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 40px; }}
+                h1 {{ color: #2c3e50; }}
+                h2 {{ color: #34495e; border-bottom: 2px solid #3498db; padding-bottom: 10px; }}
+                .metric {{ background: #ecf0f1; padding: 15px; margin: 10px 0; border-radius: 5px; }}
+                .good {{ background: #d4edda; border-left: 4px solid #28a745; }}
+                .warning {{ background: #fff3cd; border-left: 4px solid #ffc107; }}
+                .danger {{ background: #f8d7da; border-left: 4px solid #dc3545; }}
+                table {{ border-collapse: collapse; width: 100%; margin: 20px 0; }}
+                th, td {{ border: 1px solid #ddd; padding: 12px; text-align: left; }}
+                th {{ background-color: #3498db; color: white; }}
+                tr:nth-child(even) {{ background-color: #f2f2f2; }}
+            </style>
+        </head>
+        <body>
+            <h1>🎯 Fairness Analysis Report</h1>
+            <p><strong>Generated:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+            <p><strong>Problem Type:</strong> {problem_type}</p>
+            
+            <h2>Executive Summary</h2>
+            <div class="metric {'good' if fairness_score and fairness_score >= threshold_active else 'danger'}">
+                <p><strong>Overall Fairness Score:</strong> {f"{fairness_score:.3f}" if fairness_score else 'N/A'}</p>
+                <p><strong>Status:</strong> {'Fair' if fairness_score and fairness_score >= threshold_active else 'Bias Detected'}</p>
+                <p><strong>Features Analyzed:</strong> {len(columns_to_analyse)}</p>
+            </div>
+            
+            <h2>Feature-Level Analysis</h2>
+            <table>
+                <tr>
+                    <th>Feature</th>
+                    <th>Fairness Score</th>
+                    <th>Groups</th>
+                    <th>Status</th>
+                </tr>
+        """
+        
+        for feat, score in fairness_results.get("column_scores", {}).items():
+            if score is None:
+                continue
+            summary = fairness_results.get("feature_summaries", {}).get(feat, {})
+            status = "Fair" if score >= threshold_active else "Biased"
+            html_content += f"""
+                <tr>
+                    <td>{feat}</td>
+                    <td>{score:.3f}</td>
+                    <td>{summary.get('groups', 'N/A')}</td>
+                    <td>{'✅ ' if score >= FAIRNESS_THRESHOLD else '⚠️ '}{status}</td>
+                </tr>
+            """
+        
+        html_content += """
+            </table>
+            
+            <h2>Recommendations</h2>
+            <div class="metric warning">
+                <p>Review features with scores below the threshold ({FAIRNESS_THRESHOLD:.2f})</p>
+                <p>Consider fairness-aware preprocessing and model training techniques</p>
+                <p>Monitor fairness metrics regularly with new data</p>
+            </div>
+        </body>
+        </html>
+        """
+        
+        return html_content
+    
+    else:  # markdown
+        # Create Markdown report
+        md_content = f"""# Fairness Analysis Report
+
+**Generated:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Problem Type:** {problem_type}
+
+## Executive Summary
+
+- **Overall Fairness Score:** {f'{fairness_score:.3f}' if fairness_score else 'N/A'}
+- **Status:** {'✅ Fair' if fairness_score and fairness_score >= threshold_active else '⚠️ Bias Detected'}
+- **Features Analyzed:** {len(columns_to_analyse)}
+- **Threshold:** {threshold_active:.2f}
+
+## Feature-Level Analysis
+
+| Feature | Fairness Score | Groups | Status |
+|---------|----------------|--------|--------|
+"""
+        
+        for feat, score in fairness_results.get("column_scores", {}).items():
+            if score is None:
+                continue
+            summary = fairness_results.get("feature_summaries", {}).get(feat, {})
+            status = "✅ Fair" if score >= threshold_active else "⚠️ Biased"
+            md_content += f"| {feat} | {score:.3f} | {summary.get('groups', 'N/A')} | {status} |\n"
+        
+        md_content += f"""
+
+## Recommendations
+
+- Review features with scores below the threshold ({FAIRNESS_THRESHOLD:.2f})
+- Consider fairness-aware preprocessing and model training techniques
+- Monitor fairness metrics regularly with new data
+- Document any accepted fairness trade-offs for stakeholder review
+"""
+        
+        return md_content
+
+def create_interactive_impact_visualization(fairness_score, fairness_results, problem_type, monthly_volume=1000):
+    """
+    Create interactive visualization showing real-world impact of bias.
+    
+    Args:
+        fairness_score (float): Overall fairness score
+        fairness_results (dict): Results from fairness analysis
+        problem_type (str): Type of ML problem
+        monthly_volume (int): Monthly application volume
+    
+    Returns:
+        plotly.graph_objects.Figure: Interactive impact visualization
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    if fairness_score is None:
+        return None
+    
+    colors = get_accessible_color_palette()
+    
+    # Calculate impact
+    bias_severity = 1 - fairness_score
+    
+    # Determine impact level and factors
+    if bias_severity <= EXCELLENT_BIAS_IMPACT_FACTOR:  # Excellent
+        impact_factor = EXCELLENT_BIAS_IMPACT_FACTOR
+        risk_level = "Minimal"
+        risk_color = colors['good']
+    elif bias_severity <= SIGNIFICANT_DIFFERENCE_THRESHOLD:  # Good
+        impact_factor = GOOD_BIAS_IMPACT_FACTOR
+        risk_level = "Low"
+        risk_color = colors['neutral']
+    else:  # Concerning
+        impact_factor = CONCERNING_BIAS_IMPACT_FACTOR
+        risk_level = "High"
+        risk_color = colors['bad']
+    
+    # Calculate affected applications
+    affected_apps = int(monthly_volume * bias_severity * impact_factor)
+    affected_apps_yearly = affected_apps * 12
+    
+    # Calculate potential discrimination (60% of affected)
+    potential_discrimination = int(affected_apps * DISCRIMINATION_FACTOR)
+    
+    # Create visualization with subplots
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=(
+            'Monthly Impact',
+            'Risk Level',
+            'Annual Projection',
+            'Bias Breakdown by Feature'
+        ),
+        specs=[
+            [{'type': 'bar'}, {'type': 'indicator'}],
+            [{'type': 'bar'}, {'type': 'bar'}]
+        ],
+        vertical_spacing=0.15,
+        horizontal_spacing=0.15
+    )
+    
+    # 1. Monthly Impact (horizontal bar)
+    fig.add_trace(
+        go.Bar(
+            y=['Potentially Affected', 'Likely Discriminated'],
+            x=[affected_apps, potential_discrimination],
+            orientation='h',
+            marker_color=[risk_color, colors['bad']],
+            text=[f"{affected_apps:,}", f"{potential_discrimination:,}"],
+            textposition='auto',
+            hovertemplate='%{y}: %{x:,} applications<extra></extra>'
+        ),
+        row=1, col=1
+    )
+
+    # 2. Risk Level Gauge
+    fig.add_trace(
+        go.Indicator(
+            mode="gauge+number+delta",
+            value=fairness_score,
+            title={'text': f"Fairness Score"},
+            delta={'reference': FAIRNESS_THRESHOLD, 'increasing': {'color': colors['good']}},
+            gauge={
+                'axis': {'range': [0, 1]},
+                'bar': {'color': risk_color},
+                'steps': [
+                    {'range': [0, SEVERE_BIAS_THRESHOLD], 'color': '#ffe6e6'},
+                    {'range': [SEVERE_BIAS_THRESHOLD, FAIRNESS_THRESHOLD], 'color': '#fff4e6'},
+                    {'range': [FAIRNESS_THRESHOLD, 1], 'color': '#e6f7e6'}
+                ],
+                'threshold': {
+                    'line': {'color': colors['warning'], 'width': 4},
+                    'thickness': 0.75,
+                    'value': FAIRNESS_THRESHOLD
+                }
+            }
+        ),
+        row=1, col=2
+    )
+
+    # 3. Annual Projection
+    fig.add_trace(
+        go.Bar(
+            x=['Monthly', 'Yearly'],
+            y=[affected_apps, affected_apps_yearly],
+            marker_color=[risk_color, risk_color],
+            text=[f"{affected_apps:,}", f"{affected_apps_yearly:,}"],
+            textposition='auto',
+            hovertemplate='%{x}: %{y:,} affected<extra></extra>'
+        ),
+        row=2, col=1
+    )
+
+    # 4. Bias by Feature
+    if fairness_results.get("column_scores"):
+        # Get features with bias (score < 0.8)
+        biased_features = [
+            (feat, score) for feat, score in fairness_results["column_scores"].items()
+            if score is not None and score < FAIRNESS_THRESHOLD
+        ]
+
+        if biased_features:
+            # Sort by score (worst first)
+            biased_features.sort(key=lambda x: x[1])
+            feat_names = [f[0] for f in biased_features[:5]]  # Top 5
+            feat_scores = [f[1] for f in biased_features[:5]]
+            feat_colors = [colors['bad'] if s < SEVERE_BIAS_THRESHOLD else colors['warning'] for s in feat_scores]
+
+            fig.add_trace(
+                go.Bar(
+                    x=feat_names,
+                    y=feat_scores,
+                    marker_color=feat_colors,
+                    text=[f"{s:.3f}" for s in feat_scores],
+                    textposition='auto',
+                    hovertemplate='%{x}: %{y:.3f}<extra></extra>'
+                ),
+                row=2, col=2
+            )
+        else:
+            # No biased features
+            fig.add_trace(
+                go.Bar(
+                    x=['No Issues'],
+                    y=[1.0],
+                    marker_color=[colors['good']],
+                    text=['All Fair'],
+                    textposition='auto'
+                ),
+                row=2, col=2
+            )
+
+    # Update layout
+    fig.update_xaxes(title_text="Applications", row=1, col=1)
+    fig.update_xaxes(title_text="Period", row=2, col=1)
+    fig.update_xaxes(title_text="Features", row=2, col=2)
+    fig.update_yaxes(title_text="Fairness Score", row=2, col=2)
+    
+    fig.update_layout(
+        title_text=f"🎯 Real-World Impact Analysis (Based on {monthly_volume:,} monthly applications)",
+        showlegend=False,
+        height=700
+    )
+    
+    return fig
+
+def create_enhanced_group_comparison(perf_data, selected_feature, problem_type, fairness_threshold=0.8):
+    """
+    Create enhanced group comparison visualizations adapted to the number of groups.
+    
+    Args:
+        perf_data (pd.DataFrame): Performance metrics by group
+        selected_feature (str): Name of the feature being analyzed
+        problem_type (str): Type of ML problem
+        fairness_threshold (float): Threshold for fairness (default 0.8)
+    
+    Returns:
+        list: List of Plotly figures to display
+    """
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+    
+    n_groups = len(perf_data)
+    figures = []
+    colors = get_accessible_color_palette()
+    
+    # Remove 'count' from display if present
+    display_data = perf_data.copy()
+    if 'count' in display_data.columns:
+        group_counts = display_data['count']
+        display_data = display_data.drop('count', axis=1)
+    else:
+        group_counts = None
+    
+    if problem_type in ["binary_classification", "multiclass_classification", "classification"]:
+        # Classification visualizations
+        key_metrics = ['accuracy', 'precision', 'recall', 'f1']
+        available_metrics = [m for m in key_metrics if m in display_data.columns]
+        
+        if n_groups <= 10 and len(available_metrics) > 1:
+            # For few groups: grouped bar chart with multiple metrics
+            fig = go.Figure()
+            
+            for metric in available_metrics:
+                fig.add_trace(go.Bar(
+                    name=metric.capitalize(),
+                    x=display_data.index,
+                    y=display_data[metric],
+                    text=[f"{v:.3f}" for v in display_data[metric]],
+                    textposition='auto',
+                ))
+            
+            # Add fairness threshold line
+            fig.add_hline(
+                y=fairness_threshold, 
+                line_dash="dash", 
+                line_color=colors['warning'],
+                annotation_text=f"Fairness Threshold ({fairness_threshold})",
+                annotation_position="right"
+            )
+            
+            fig.update_layout(
+                title=f"Performance Metrics by {selected_feature}",
+                xaxis_title=selected_feature,
+                yaxis_title="Score",
+                barmode='group',
+                height=400,
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            figures.append(fig)
+        
+        else:
+            # For many groups: separate charts for each key metric
+            for metric in available_metrics[:4]:  # Show top 4 metrics
+                # Determine color based on values relative to mean
+                mean_val = display_data[metric].mean()
+                colors_list = [colors['good'] if v >= mean_val else colors['warning'] 
+                             for v in display_data[metric]]
+                
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=display_data.index,
+                    y=display_data[metric],
+                    marker_color=colors_list,
+                    text=[f"{v:.3f}" for v in display_data[metric]],
+                    textposition='auto',
+                ))
+                
+                # Add mean line
+                fig.add_hline(
+                    y=mean_val,
+                    line_dash="dash",
+                    annotation_text="Average",
+                    annotation_position="right"
+                )
+                
+                fig.update_layout(
+                    title=f"{metric.capitalize()} by {selected_feature}",
+                    xaxis_title=selected_feature,
+                    yaxis_title=metric.capitalize(),
+                    height=350,
+                    showlegend=False
+                )
+                
+                figures.append(fig)
+    
+    else:
+        # Regression visualizations
+        reg_metrics = ['r2', 'mae', 'rmse']
+        available_metrics = [m for m in reg_metrics if m in display_data.columns]
+        
+        for metric in available_metrics[:2]:  # Show top 2 metrics
+            # For error metrics, lower is better; for R², higher is better
+            is_error_metric = metric in ['mae', 'rmse', 'mse']
+            
+            if is_error_metric:
+                # Lower is better - color accordingly
+                min_val = display_data[metric].min()
+                colors_list = [colors['good'] if v <= min_val * 1.2 else colors['warning']
+                             for v in display_data[metric]]
+            else:
+                # Higher is better (R²)
+                max_val = display_data[metric].max()
+                colors_list = [colors['good'] if v >= max_val * 0.9 else colors['warning']
+                             for v in display_data[metric]]
+            
+            fig = go.Figure()
+            fig.add_trace(go.Bar(
+                x=display_data.index,
+                y=display_data[metric],
+                marker_color=colors_list,
+                text=[f"{v:.3f}" for v in display_data[metric]],
+                textposition='auto',
+            ))
+            
+            # Add mean line
+            mean_val = display_data[metric].mean()
+            fig.add_hline(
+                y=mean_val,
+                line_dash="dash",
+                annotation_text="Average",
+                annotation_position="right"
+            )
+            
+            metric_names = {
+                'r2': 'R² Score',
+                'mae': 'Mean Absolute Error',
+                'rmse': 'Root Mean Squared Error',
+                'mse': 'Mean Squared Error'
+            }
+            
+            fig.update_layout(
+                title=f"{metric_names.get(metric, metric.upper())} by {selected_feature}",
+                xaxis_title=selected_feature,
+                yaxis_title=metric_names.get(metric, metric.upper()),
+                height=350,
+                showlegend=False
+            )
+            
+            figures.append(fig)
+    
+    # Add sample distribution subplot if we have group counts
+    if group_counts is not None and len(figures) > 0:
+        fig_dist = go.Figure()
+        fig_dist.add_trace(go.Bar(
+            x=group_counts.index,
+            y=group_counts.values,
+            marker_color=colors['neutral'],
+            text=[f"{int(v):,}" for v in group_counts.values],
+            textposition='auto',
+        ))
+        
+        fig_dist.update_layout(
+            title=f"Sample Distribution Across {selected_feature} Groups",
+            xaxis_title=selected_feature,
+            yaxis_title="Number of Samples",
+            height=300,
+            showlegend=False
+        )
+        
+        figures.append(fig_dist)
+    
+    return figures
+
+def create_fairness_heatmap(fairness_results, problem_type):
+    """
+    Create an interactive heatmap showing fairness scores across all features and components.
+    
+    This provides an at-a-glance overview of fairness landscape, making it easy to identify
+    which features and which fairness components need attention.
+    
+    Args:
+        fairness_results (dict): Results from analyse_model_fairness()
+        problem_type (str): Type of ML problem
+    
+    Returns:
+        plotly.graph_objects.Figure: Interactive heatmap figure
+    """
+    import plotly.graph_objects as go
+    
+    if not fairness_results.get("column_scores"):
+        return None
+    
+    # Get color palette
+    colors = get_accessible_color_palette()
+    
+    # Prepare data for heatmap
+    features = []
+    scores_matrix = []
+    component_names = []
+    
+    # Determine component names based on problem type
+    if problem_type == "multiclass_classification":
+        component_names = ['Demographic Parity', 'Accuracy Consistency']
+    elif problem_type in ["binary_classification", "classification"]:
+        component_names = ['Demographic Parity', 'Equalized Odds']
+    else:  # regression
+        component_names = ['Error Consistency']
+    
+    # Sort features by overall score (worst first)
+    sorted_features = sorted(
+        fairness_results["column_scores"].items(),
+        key=lambda x: x[1] if x[1] is not None else 1.0
+    )
+    
+    for feature, overall_score in sorted_features:
+        if overall_score is None:
+            continue
+            
+        features.append(feature)
+        summary = fairness_results.get("feature_summaries", {}).get(feature, {})
+        individual_scores = summary.get("individual_scores", {})
+        
+        # Build row based on problem type
+        if problem_type == "multiclass_classification":
+            row = [
+                individual_scores.get('demographic_parity', 0),
+                individual_scores.get('accuracy_consistency', 0),
+            ]
+        elif problem_type in ["binary_classification", "classification"]:
+            row = [
+                individual_scores.get('demographic_parity', 0),
+                individual_scores.get('equalized_odds', 0),
+            ]
+        else:  # regression
+            row = [
+                individual_scores.get('error_consistency', 0),
+            ]
+        
+        scores_matrix.append(row)
+    
+    if not scores_matrix:
+        return None
+    
+    # Create heatmap with custom colorscale
+    # Red (0-0.6), Orange (0.6-0.8), Green (0.8-1.0)
+    colorscale = [
+        [0.0, colors['bad']],      # Severe bias
+        [0.6, colors['warning']],  # Moderate bias
+        [0.8, colors['good']],     # Good fairness
+        [1.0, colors['good']]      # Excellent fairness
+    ]
+    
+    # Create hover text with interpretations
+    hover_text = []
+    for i, feature in enumerate(features):
+        row_hover = []
+        for j, component in enumerate(component_names):
+            score = scores_matrix[i][j]
+            if score >= 0.8:
+                status = "✅ Fair"
+            elif score >= 0.6:
+                status = "⚠️ Review Needed"
+            else:
+                status = "🔴 Critical"
+            
+            summary = fairness_results.get("feature_summaries", {}).get(feature, {})
+            groups = summary.get('groups', 'N/A')
+            
+            hover_text_cell = (
+                f"<b>{feature}</b><br>"
+                f"Component: {component}<br>"
+                f"Score: {score:.3f}<br>"
+                f"Status: {status}<br>"
+                f"Groups: {groups}"
+            )
+            row_hover.append(hover_text_cell)
+        hover_text.append(row_hover)
+    
+    # Create the heatmap
+    fig = go.Figure(data=go.Heatmap(
+        z=scores_matrix,
+        x=component_names,
+        y=features,
+        colorscale=colorscale,
+        text=hover_text,
+        hovertemplate='%{text}<extra></extra>',
+        colorbar=dict(
+            title="Fairness<br>Score",
+            ticktext=['Severe<br>(<0.6)', 'Review<br>(0.6-0.8)', 'Fair<br>(≥0.8)'],
+            tickvals=[0.3, 0.7, 0.9],
+            tickmode='array'
+        ),
+        zmid=0.7,  # Center the colorscale at 0.7
+        zmin=0.0,
+        zmax=1.0
+    ))
+    
+    fig.update_layout(
+        title={
+            'text': "🗺️ Fairness Landscape Overview<br><sub>Darker red = more bias concern | Green = fair</sub>",
+            'x': 0.5,
+            'xanchor': 'center'
+        },
+        xaxis_title="Fairness Components",
+        yaxis_title="Features (Sorted by Overall Score)",
+        height=max(300, len(features) * 40),  # Dynamic height based on number of features
+        margin=dict(l=150, r=100, t=80, b=50),
+        font=dict(size=11)
+    )
+    
+    return fig
 
 # === FEATURE SELECTION INTERFACE ===
 
@@ -421,15 +1319,65 @@ def create_clean_feature_selection_interface(valid_columns, protected_cols, filt
             if high_cardinality:
                 with st.expander("⚠️ High-Cardinality Features", expanded=False):
                     st.warning("These features have many unique values, which may affect analysis quality:")
-                    for col, count in high_cardinality:
-                        st.markdown(f"• **{col}**: {count} unique values")
                     
-                    st.markdown("""
-                    **Recommendations:**
-                    - Consider grouping values into ranges (e.g., age groups: 18-25, 26-35, etc.)
-                    - Focus on features with fewer categories for more reliable results
-                    - Remove features that are essentially unique identifiers
-                    """)
+                    # Add auto-binning option
+                    use_auto_binning = st.checkbox(
+                        "✨ **Use Automatic Grouping (Recommended)**",
+                        value=True,
+                        key="use_auto_binning",
+                        help="Automatically group high-cardinality features into 5-7 meaningful categories for better analysis"
+                    )
+                    
+                    if use_auto_binning:
+                        n_bins = 6
+                    #    n_bins = st.slider(
+                    #        "Number of groups to create:",
+                    #        min_value=3,
+                    #        max_value=10,
+                    #        value=6,
+                    #        key="auto_bin_count",
+                    #        help="Fewer groups = simpler analysis, more groups = more detail"
+                    #    )
+                        st.session_state.auto_binning_enabled = True
+                        st.session_state.auto_binning_n_bins = n_bins
+                    else:
+                        st.session_state.auto_binning_enabled = False
+                    
+                    # Show specific recommendations for each feature
+                    for col, count in high_cardinality:
+                        st.markdown(f"**{col}**: {count} unique values")
+                        
+                        # Get binning suggestion
+                        feature_data = st.session_state.builder.X_test[col]
+                        suggestion = suggest_binning_strategy(feature_data, col)
+                        
+                        with st.expander(f"💡 Recommendation for {col}", expanded=False):
+                            st.info(suggestion['reasoning'])
+                            
+                            if suggestion['preview']:
+                                st.markdown("**Preview of suggested grouping:**")
+                                if isinstance(suggestion['preview'], dict) and 'top_categories' in suggestion['preview']:
+                                    # Categorical preview
+                                    st.markdown("Top categories:")
+                                    for cat, count in suggestion['preview']['top_categories'].items():
+                                        st.caption(f"• {cat}: {count} samples")
+                                    if suggestion['preview']['other_count'] > 0:
+                                        st.caption(f"• Other: {suggestion['preview']['other_count']} samples")
+                                else:
+                                    # Numeric preview
+                                    preview_df = pd.DataFrame([
+                                        {'Group': k, 'Sample Count': v} 
+                                        for k, v in list(suggestion['preview'].items())[:7]
+                                    ])
+                                    st.dataframe(preview_df, hide_index=True, use_container_width=True)
+                    
+                    if not use_auto_binning:
+                        st.markdown("""
+                        **Manual Recommendations:**
+                        - Consider grouping values into ranges (e.g., age groups: 18-25, 26-35, etc.)
+                        - Focus on features with fewer categories for more reliable results
+                        - Remove features that are essentially unique identifiers
+                        """)
 
             if small_group_features:
                 with st.expander("👥 Small Group Sizes", expanded=False):
@@ -588,6 +1536,9 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
         progress_bar = st.progress(0)
         status_text = st.empty()
         
+        # Store binning information for later use
+        binning_info = {}
+        
         # Analyse each protected attribute
         for i, feature_col in enumerate(columns_to_analyse):
             try:
@@ -596,20 +1547,45 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
                 status_text.text(f"Analyzing feature {i+1}/{len(columns_to_analyse)}: {feature_col}")
                 progress_bar.progress(progress)
                 
+                # Check if auto-binning should be applied
+                feature_data = X_test[feature_col]
+                use_binning = (
+                    hasattr(st.session_state, 'auto_binning_enabled') and 
+                    st.session_state.auto_binning_enabled and
+                    feature_data.nunique() > 15
+                )
+                
+                if use_binning:
+                    # Apply auto-binning
+                    n_bins = getattr(st.session_state, 'auto_binning_n_bins', 6)
+                    binned_feature, bin_info = auto_bin_high_cardinality_feature(
+                        feature_data, 
+                        feature_col, 
+                        n_bins=n_bins
+                    )
+                    
+                    if bin_info['was_binned']:
+                        feature_data = binned_feature
+                        binning_info[feature_col] = bin_info
+                        status_text.text(
+                            f"Analyzing feature {i+1}/{len(columns_to_analyse)}: {feature_col} "
+                            f"(auto-grouped from {bin_info['n_original_groups']} to {bin_info['n_final_groups']} groups)"
+                        )
+                
                 # Create MetricFrame for performance metrics
                 perf_metric_frame = MetricFrame(
                     metrics=performance_metrics,
                     y_true=y_test,
                     y_pred=predictions,
-                    sensitive_features=X_test[feature_col]
+                    sensitive_features=feature_data
                 )
                 
-                # Create MetricFrame for fairness metrics
+                # Create MetricFrame for fairness metrics (use potentially binned feature_data)
                 fairness_metric_frame = MetricFrame(
                     metrics=fairness_metrics,
                     y_true=y_test,
                     y_pred=predictions,
-                    sensitive_features=X_test[feature_col]
+                    sensitive_features=feature_data
                 )
                 
                 # Store both MetricFrames
@@ -627,7 +1603,7 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
                             dp_diff = demographic_parity_difference(
                                 y_true=y_test,
                                 y_pred=predictions,
-                                sensitive_features=X_test[feature_col]
+                                sensitive_features=feature_data
                             )
                             dp_score = PERFECT_FAIRNESS_SCORE - abs(dp_diff)
                             
@@ -662,14 +1638,14 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
                             dp_diff = demographic_parity_difference(
                                 y_true=y_test,
                                 y_pred=predictions,
-                                sensitive_features=X_test[feature_col]
+                                sensitive_features=feature_data
                             )
                             
                             # Calculate equalized odds difference
                             eo_diff = equalized_odds_difference(
                                 y_true=y_test,
                                 y_pred=predictions,
-                                sensitive_features=X_test[feature_col]
+                                sensitive_features=feature_data
                             )
                             
                             # Convert differences to fairness scores
@@ -727,10 +1703,12 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
                 fairness_results["feature_summaries"][feature_col] = {
                     "score": fairness_score,
                     "individual_scores": individual_scores,
-                    "groups": X_test[feature_col].nunique(),
-                    "smallest_group": X_test[feature_col].value_counts().min(),
-                    "largest_group": X_test[feature_col].value_counts().max(),
-                    "is_numeric": pd.api.types.is_numeric_dtype(X_test[feature_col])
+                    "groups": feature_data.nunique(),
+                    "smallest_group": feature_data.value_counts().min(),
+                    "largest_group": feature_data.value_counts().max(),
+                    "is_numeric": pd.api.types.is_numeric_dtype(feature_data),
+                    "was_binned": feature_col in binning_info,
+                    "binning_info": binning_info.get(feature_col, {})
                 }
                 
                 # Check for bias
@@ -741,13 +1719,33 @@ def analyse_model_fairness(X_test, y_test, predictions, columns_to_analyse, prob
                     )
                 
             except Exception as e:
-                st.error(f"❌ **Failed to analyze feature '{feature_col}'**\n\n"
-                         f"**Error Details:** {str(e)}\n\n"
-                         f"**Possible Causes:**\n"
-                         f"- Insufficient data for this feature (too few samples)\n"
-                         f"- All groups have identical values (no variance)\n"
-                         f"- Data type incompatibility with fairness metrics\n\n"
-                         f"**Recommendation:** Try selecting different features or check data quality for '{feature_col}'")
+                error_message = str(e)
+                
+                # Provide user-friendly error messages based on error type
+                if "not supported between instances of" in error_message:
+                    st.error(f"❌ **Cannot analyze feature '{feature_col}'**\n\n"
+                             f"**Issue:** This feature contains mixed data types (text and numbers) that cannot be compared directly.\n\n"
+                             f"**Common Causes:**\n"
+                             f"- Feature was automatically grouped but resulted in inconsistent labels\n"
+                             f"- Original data contains mixed text and numeric values\n"
+                             f"- Feature engineering created incompatible value types\n\n"
+                             f"**Solutions:**\n"
+                             f"1. Try disabling automatic grouping for this feature (uncheck 'Use Automatic Grouping')\n"
+                             f"2. Pre-process this feature in the Data Preprocessing stage to ensure consistent types\n"
+                             f"3. Remove this feature from fairness analysis and analyze other features\n\n"
+                             f"**Technical Details (for debugging):** {error_message}")
+                elif "insufficient data" in error_message.lower() or "too few" in error_message.lower():
+                    st.error(f"❌ **Insufficient data for feature '{feature_col}'**\n\n"
+                             f"**Issue:** This feature doesn't have enough samples in each group for reliable analysis.\n\n"
+                             f"**Recommendation:** Collect more data or combine small groups together.")
+                else:
+                    st.error(f"❌ **Failed to analyze feature '{feature_col}'**\n\n"
+                             f"**Error Details:** {error_message}\n\n"
+                             f"**Possible Causes:**\n"
+                             f"- Insufficient data for this feature (too few samples)\n"
+                             f"- All groups have identical values (no variance)\n"
+                             f"- Data type incompatibility with fairness metrics\n\n"
+                             f"**Recommendation:** Try selecting different features or check data quality for '{feature_col}'")
                 continue
         
         # Clear progress indicators
@@ -970,8 +1968,67 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
     
     fairness_score = fairness_results.get("fairness_score", PERFECT_FAIRNESS_SCORE)
     
-    # === 1. EXECUTIVE SUMMARY ===
+    # === 0. FAIRNESS THRESHOLD CUSTOMIZATION ===
     st.markdown("## 📊 Fairness Analysis Dashboard")
+    
+    with st.expander("⚙️ Fairness Settings", expanded=False):
+        st.markdown("""
+        **Customize your fairness threshold** based on your industry standards and requirements.
+        The threshold determines what scores are considered "fair" vs "biased".
+        """)
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            # Preset profiles
+            preset = st.radio(
+                "Choose a preset:",
+                ["Standard (0.80)", "Strict (0.85)", "Lenient (0.75)", "Custom"],
+                horizontal=True,
+                key="fairness_preset"
+            )
+            
+            if preset == "Standard (0.80)":
+                threshold_value = 0.80
+            elif preset == "Strict (0.85)":
+                threshold_value = 0.85
+            elif preset == "Lenient (0.75)":
+                threshold_value = 0.75
+            else:  # Custom
+                threshold_value = st.slider(
+                    "Custom threshold:",
+                    min_value=0.60,
+                    max_value=0.95,
+                    value=0.80,
+                    step=0.05,
+                    key="custom_threshold",
+                    help="Lower = more lenient, Higher = stricter fairness requirements"
+                )
+        
+        with col2:
+            st.metric("Active Threshold", f"{threshold_value:.2f}")
+            
+            # Show impact of threshold choice
+            if fairness_results.get("column_scores"):
+                scores = [s for s in fairness_results["column_scores"].values() if s is not None]
+                flagged = sum(1 for s in scores if s < threshold_value)
+                st.caption(f"🚩 {flagged} of {len(scores)} features flagged")
+        
+        # Store threshold in session state for use throughout dashboard
+        st.session_state.fairness_threshold = threshold_value
+        
+        # Educational note
+        st.info("""
+        💡 **Understanding Thresholds:**
+        - **0.85 (Strict)**: Recommended for high-stakes applications (healthcare, legal, hiring)
+        - **0.80 (Standard)**: Industry standard for most applications
+        - **0.75 (Lenient)**: May be acceptable for low-stakes exploratory models
+        """)
+    
+    # Use the threshold throughout the dashboard
+    FAIRNESS_THRESHOLD = threshold_value
+    
+    # === 1. EXECUTIVE SUMMARY ===
     
     # Quick metrics row
     col1, col2, col3, col4 = st.columns(UI_COLUMNS_METRICS)
@@ -1002,6 +2059,11 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
     st.markdown("### 📋 All Features Analysis")
     
     if fairness_results.get("column_scores"):
+        # Count features by risk level
+        critical_count = 0
+        review_count = 0
+        fair_count = 0
+        
         features_data = []
         for feature, score in fairness_results["column_scores"].items():
             if score is None:
@@ -1009,95 +2071,99 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
             
             summary = fairness_results.get("feature_summaries", {}).get(feature, {})
             
+            # Determine priority and status
             if score >= FAIRNESS_THRESHOLD:
-                status = "✅ Fair"
+                priority_emoji = "🟢"
+                status = "Fair"
                 risk = "Low"
+                fair_count += 1
+            elif score >= SEVERE_BIAS_THRESHOLD:
+                priority_emoji = "🟡"
+                status = "Review Needed"
+                risk = "Medium"
+                review_count += 1
             else:
-                status = "⚠️ Bias Risk"
-                risk = "High" if score < SEVERE_BIAS_THRESHOLD else "Medium"
+                priority_emoji = "🔴"
+                status = "Critical"
+                risk = "High"
+                critical_count += 1
+            
+            # Check if feature was auto-binned
+            binning_note = ""
+            if summary.get('was_binned', False):
+                bin_info = summary.get('binning_info', {})
+                if bin_info:
+                    binning_note = f" (grouped: {bin_info.get('n_original_groups', '?')}→{summary.get('groups', '?')})"
             
             features_data.append({
-                "Feature": feature,
-                "Score": f"{score:.3f}",
+                "Priority": priority_emoji,
+                "Feature": feature + binning_note,
+                "Score": score,
+                "Fairness Score": f"{score:.3f}",
                 "Status": status,
                 "Groups": summary.get('groups', 'N/A'),
                 "Risk": risk
             })
         
         if features_data:
-            st.dataframe(pd.DataFrame(features_data), width='stretch', hide_index=True)
+            # Show quick stats
+            stat_col1, stat_col2, stat_col3 = st.columns(3)
+            with stat_col1:
+                if critical_count > 0:
+                    st.error(f"🔴 **{critical_count}** Critical")
+                else:
+                    st.success(f"✅ **0** Critical")
+            with stat_col2:
+                if review_count > 0:
+                    st.warning(f"🟡 **{review_count}** Review Needed")
+                else:
+                    st.info(f"✅ **0** Review Needed")
+            with stat_col3:
+                st.success(f"🟢 **{fair_count}** Fair")
             
-            # Add expandable detailed scores
-            with st.expander("🔍 Detailed Component Scores", expanded=False):
-                st.markdown("**Fairness Component Breakdown by Feature:**")
+            st.markdown("")
+
+            # Create dataframe
+            df = pd.DataFrame(features_data)
+
+            # Sort by score (worst first)
+            df = df.sort_values('Score', ascending=True)
+            
+            # Apply top-N limit
+            df = df.head(critical_count)
+            
+            # Drop the numeric score column used for sorting
+            display_df = df.drop('Score', axis=1)
+            
+            # Create styled dataframe
+            def highlight_rows(row):
+                if row['Risk'] == 'High':
+                    return ['background-color: #ffe6e6'] * len(row)
+                elif row['Risk'] == 'Medium':
+                    return ['background-color: #fff4e6'] * len(row)
+                else:
+                    return ['background-color: #e6f7e6'] * len(row)
+            
+            styled_df = display_df.style.apply(highlight_rows, axis=1)
+            
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            
+            # Add fairness heatmap visualization
+            st.markdown("")
+            with st.expander("🗺️ Visual Fairness Heatmap", expanded=True):
+                st.markdown("""
+                This heatmap shows fairness scores across all features at a glance. 
+                **Red** areas indicate bias concerns, **orange** areas need review, and **green** areas are fair.
+                Hover over cells for details.
+                """)
                 
-                for feature, score in fairness_results["column_scores"].items():
-                    if score is None:
-                        continue
-                    
-                    summary = fairness_results.get("feature_summaries", {}).get(feature, {})
-                    individual_scores = summary.get("individual_scores", {})
-                    
-                    if individual_scores:
-                        st.markdown(f"**{feature}:**")
-                        
-                        if problem_type in ["binary_classification", "multiclass_classification", "classification"]:
-                            if problem_type == "multiclass_classification":
-                                # Multiclass display
-                                if 'demographic_parity' in individual_scores and 'accuracy_consistency' in individual_scores:
-                                    dp_score = individual_scores['demographic_parity']
-                                    ac_score = individual_scores['accuracy_consistency']
-                                    
-                                    comp_detail_col1, comp_detail_col2, comp_detail_col3 = st.columns(3)
-                                    
-                                    with comp_detail_col1:
-                                        if dp_score is not None:
-                                            dp_status = "✅" if dp_score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Demographic Parity: {dp_score:.3f} {dp_status}")
-                                    
-                                    with comp_detail_col2:
-                                        if ac_score is not None:
-                                            ac_status = "✅" if ac_score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Accuracy Consistency: {ac_score:.3f} {ac_status}")
-                                    
-                                    with comp_detail_col3:
-                                        if score is not None:
-                                            overall_status = "✅" if score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Overall: {score:.3f} {overall_status}")
-                            else:
-                                # Binary classification display
-                                if 'demographic_parity' in individual_scores and 'equalized_odds' in individual_scores:
-                                    dp_score = individual_scores['demographic_parity']
-                                    eo_score = individual_scores['equalized_odds']
-                                    
-                                    comp_detail_col1, comp_detail_col2, comp_detail_col3 = st.columns(3)
-                                    
-                                    with comp_detail_col1:
-                                        if dp_score is not None:
-                                            dp_status = "✅" if dp_score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Demographic Parity: {dp_score:.3f} {dp_status}")
-                                    
-                                    with comp_detail_col2:
-                                        if eo_score is not None:
-                                            eo_status = "✅" if eo_score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Equalized Odds: {eo_score:.3f} {eo_status}")
-                                    
-                                    with comp_detail_col3:
-                                        if score is not None:
-                                            overall_status = "✅" if score >= FAIRNESS_THRESHOLD else "⚠️"
-                                            st.caption(f"Overall: {score:.3f} {overall_status}")
-                        
-                        else:  # regression
-                            if 'error_consistency' in individual_scores:
-                                error_score = individual_scores['error_consistency']
-                                if error_score is not None:
-                                    error_status = "✅" if error_score >= FAIRNESS_THRESHOLD else "⚠️"
-                                    st.caption(f"Error Consistency: {error_score:.3f} {error_status}")
-                        
-                        st.markdown("---")
+                heatmap_fig = create_fairness_heatmap(fairness_results, problem_type)
+                if heatmap_fig:
+                    st.plotly_chart(heatmap_fig, use_container_width=True, config={'responsive': True})
+                else:
+                    st.info("Heatmap not available - insufficient data.")
+
     # === 2. INTERPRETATION ===
-    st.markdown("### 🎯 What This Means in Plain English")
-    
     if fairness_score is None:
         st.error("""
         ❌ **Analysis could not be completed.** The fairness analysis failed, likely due to:
@@ -1160,79 +2226,57 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
             **Real-world impact:** Some groups may be unfairly disadvantaged by your model's decisions.
             """)
 
-    # === 3. REAL-WORLD IMPACT CALCULATOR ===
-    st.markdown("### 🎲 Real-World Impact Example")
+    # === 3. INTERACTIVE REAL-WORLD IMPACT VISUALIZATION ===
+    st.markdown("### 🎯 Real-World Impact Analysis")
     
     if fairness_score is not None:
-        st.markdown(f"**Scenario: Loan Application Decisions ({EXAMPLE_MONTHLY_APPLICATIONS:,} applications/month)**")
-    
-        # Calculate impact based on fairness score
-        bias_severity = 1 - fairness_score
+        # Add volume input for customization
+        impact_col1, impact_col2 = st.columns([2, 1])
+        
+        with impact_col1:
+            st.markdown("""
+            Understand how bias in your model could affect real people in your application. 
+            Adjust the monthly volume to match your use case.
+            """)
+        
+        with impact_col2:
+            monthly_volume = st.number_input(
+                "Monthly Applications:",
+                min_value=100,
+                max_value=1000000,
+                value=1000,
+                step=100,
+                key="impact_volume",
+                help="Adjust this to match your expected application volume"
+            )
+        
+        # Create and display interactive visualization
+        impact_fig = create_interactive_impact_visualization(
+            fairness_score, 
+            fairness_results, 
+            problem_type,
+            monthly_volume=monthly_volume
+        )
+        
+        if impact_fig:
+            st.plotly_chart(impact_fig, use_container_width=True, config={'responsive': True})
+            
+            # Add brief explanation
+            st.caption("""
+            💡 **How to interpret this:** The visualization shows the estimated number of people potentially 
+            affected by bias in your model. "Potentially Affected" includes anyone who might experience unfair treatment. 
+            "Likely Discriminated" is a subset representing those most likely to experience actual harm. 
+            The gauge shows your overall fairness score against the industry standard threshold (0.8).
+            """)
+        else:
+            st.info("Impact visualization not available - fairness score could not be calculated.")
     else:
         st.markdown("**Impact analysis not available due to fairness calculation failure.**")
-        return  # Exit early if no fairness score
-    
-    if bias_severity <= EXCELLENT_BIAS_IMPACT_FACTOR:  # Very fair (score >= 0.9)
-        st.success(f"""
-        **📊 Impact Analysis:**
-        - **Fairness Score:** {fairness_score:.3f} (Excellent)
-        - **Bias Severity:** {bias_severity:.1%}
-        - **Estimated Impact:** ~{int(EXAMPLE_MONTHLY_APPLICATIONS * bias_severity * EXCELLENT_BIAS_IMPACT_FACTOR)} applications/month might experience unfair treatment
-        - **Risk Level:** Minimal - Your model meets the highest fairness standards
-        """)
-    elif bias_severity <= SIGNIFICANT_DIFFERENCE_THRESHOLD:  # Good fairness (score >= 0.8)
-        affected_apps = int(EXAMPLE_MONTHLY_APPLICATIONS * bias_severity * GOOD_BIAS_IMPACT_FACTOR)
-        st.info(f"""
-        **📊 Impact Analysis:**
-        - **Fairness Score:** {fairness_score:.3f} (Good)
-        - **Bias Severity:** {bias_severity:.1%}
-        - **Estimated Impact:** ~{affected_apps} applications/month might experience unfair treatment
-        - **Risk Level:** Low - Within acceptable industry standards
-        
-        **Example:** If Group A has 80% approval rate and Group B has 75% approval rate, 
-        that's a {bias_severity:.1%} difference affecting roughly {affected_apps} qualified applicants.
-        """)
-    else:  # Concerning bias (score < 0.8)
-        affected_apps = int(EXAMPLE_MONTHLY_APPLICATIONS * bias_severity * CONCERNING_BIAS_IMPACT_FACTOR)
-        potential_discrimination = int(affected_apps * DISCRIMINATION_FACTOR)
-        st.warning(f"""
-        **📊 Impact Analysis:**
-        - **Fairness Score:** {fairness_score:.3f} (Needs Attention)
-        - **Bias Severity:** {bias_severity:.1%}
-        - **Estimated Impact:** ~{affected_apps} applications/month might experience unfair treatment
-        - **Potential Discrimination:** ~{potential_discrimination} qualified applicants might be wrongly rejected
-        - **Risk Level:** High - Requires immediate attention
-        
-        **Example:** If Group A has 80% approval rate and Group B has {80 - (bias_severity * 100):.0f}% approval rate, 
-        this {bias_severity:.1%} gap could affect {affected_apps} people monthly, with {potential_discrimination} potentially 
-        qualified applicants being unfairly denied loans.
-        """)
-    
-    # Add calculation explanation
-    with st.expander("🧮 How We Calculate Impact", expanded=False):
-        st.markdown(f"""
-        **Calculation Method:**
-        
-        1. **Bias Severity:** 1 - Fairness Score = 1 - {fairness_score:.3f} = {bias_severity:.3f}
-        2. **Impact Factor:** Based on severity level:
-           - Excellent (≥0.9): 10% of bias severity
-           - Good (≥0.8): 30% of bias severity  
-           - Concerning (<0.8): 50% of bias severity
-        3. **Affected Applications:** 1,000 × {bias_severity:.3f} × Impact Factor
-        
-        **Assumptions:**
-        - Monthly application volume: 1,000
-        - Not all bias translates to actual harm (hence the impact factor)
-        - Real impact depends on business context and decision thresholds
-        
-        **Note:** These are estimates for illustration. Actual impact depends on your specific 
-        business context, decision thresholds, and the nature of the bias detected.
-        """)
 
     st.markdown("---")
 
     # === 5. FEATURE SELECTOR FOR DETAILED ANALYSIS ===
-    st.markdown("### 🔍 Select Feature for Detailed Analysis")
+    st.markdown("### 🔍 Performance Metric Analysis")
     selected_feature = st.selectbox(
         "Choose a feature to analyze in detail:",
         columns_to_analyse,
@@ -1262,99 +2306,13 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
         if isinstance(smallest, int) and smallest < MIN_SAMPLE_SIZE_WARNING:
             st.caption("⚠️ Small sample size")
 
-    # Show individual fairness component scores
-    if individual_scores:
-        st.markdown("#### 🔍 Fairness Component Breakdown")
-        
-        if problem_type in ["binary_classification", "multiclass_classification", "classification"]:
-            if 'demographic_parity' in individual_scores and 'equalized_odds' in individual_scores:
-                comp_col1, comp_col2 = st.columns(2)
-                
-                with comp_col1:
-                    dp_score = individual_scores['demographic_parity']
-                    if dp_score is not None:
-                        dp_color = "🟢" if dp_score >= FAIRNESS_THRESHOLD else "🟡" if dp_score >= 0.6 else "🔴"
-                        st.metric(
-                            "Demographic Parity", 
-                            f"{dp_score:.3f}",
-                            help="Do all groups get positive predictions at similar rates?"
-                        )
-                        st.caption(f"{dp_color} {'Fair' if dp_score >= FAIRNESS_THRESHOLD else 'Biased'}")
-                
-                with comp_col2:
-                    eo_score = individual_scores['equalized_odds']
-                    if eo_score is not None:
-                        eo_color = "🟢" if eo_score >= FAIRNESS_THRESHOLD else "🟡" if eo_score >= 0.6 else "🔴"
-                        st.metric(
-                            "Equalized Odds", 
-                            f"{eo_score:.3f}",
-                            help="Do all groups have similar error rates?"
-                        )
-                        st.caption(f"{eo_color} {'Fair' if eo_score >= FAIRNESS_THRESHOLD else 'Biased'}")
-                
-                # Explanation
-                st.info(f"""
-                💡 **Overall Score Explanation:** The overall fairness score ({feature_score:.3f}) is the **worst** of these two components, 
-                because true fairness requires both conditions to be met.
-                """)
-        
-        else:  # regression
-            if 'error_consistency' in individual_scores:
-                error_score = individual_scores['error_consistency']
-                if error_score is not None:
-                    error_color = "🟢" if error_score >= FAIRNESS_THRESHOLD else "🟡" if error_score >= 0.6 else "🔴"
-                    st.metric(
-                        "Error Consistency", 
-                        f"{error_score:.3f}",
-                        help="Do all groups get similarly accurate predictions?"
-                    )
-                    st.caption(f"{error_color} {'Fair' if error_score >= FAIRNESS_THRESHOLD else 'Biased'}")
-                    
-                    st.info("""
-                    💡 **Score Explanation:** This measures how consistently accurate the model is across different groups. 
-                    A score of 1.0 means all groups have identical prediction errors.
-                    """)
-
-        # === 9. METHODOLOGY EXPLANATION ===
-        with st.expander("🔬 How We Calculated These Scores", expanded=False):
-            if problem_type in ["binary_classification", "multiclass_classification", "classification"]:
-                st.markdown("""
-                **For Classification Models:**
-                
-                1. **Demographic Parity:** Do all groups get positive predictions at similar rates?
-                - Perfect score (1.0) = All groups have identical positive prediction rates
-                - Poor score (<0.8) = Some groups get positive predictions much more/less often
-                
-                2. **Equalized Odds:** Do all groups have similar error rates?
-                - Perfect score (1.0) = All groups have identical true/false positive rates
-                - Poor score (<0.8) = Some groups have higher error rates
-                
-                3. **Final Score:** We take the worst of these two scores because fairness requires both conditions.
-                
-                **Example:** If Group A gets loans 80% of the time and Group B gets loans 60% of the time, 
-                that's a demographic parity difference of 20%, giving a score of 0.8.
-                """)
-            else:
-                st.markdown("""
-                **For Regression Models:**
-                
-                1. **Error Consistency:** Do all groups get similarly accurate predictions?
-                - We calculate Mean Absolute Error (MAE) for each group
-                - Perfect score (1.0) = All groups have identical prediction errors
-                - Poor score (<0.8) = Some groups get much less accurate predictions
-                
-                2. **Final Score:** Ratio of best error rate to worst error rate across groups.
-                
-                **Example:** If Group A has average error of $1,000 and Group B has average error of $2,000,
-                the fairness score would be 1,000/2,000 = 0.5 (concerning bias).
-                """)
-
     # === 7. PERFORMANCE BY GROUP ===
     if selected_feature in fairness_results.get("metric_frames", {}):
         st.markdown("#### 📊 Model Performance by Group")
         
         # === METRIC EXPLAINER SECTION ===
         with st.expander("📚 Understanding Performance Metrics", expanded=False):
+
             st.markdown("### 🎯 What Each Metric Means")
             
             if problem_type in ["binary_classification", "multiclass_classification", "classification"]:
@@ -1551,105 +2509,24 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
         if 'performance' in metric_frame:
             perf_data = metric_frame['performance'].by_group
             
-            # Show key metric chart
-            if problem_type in ["binary_classification", "multiclass_classification", "classification"] and 'accuracy' in perf_data.columns:
-                fig = px.bar(
-                    x=perf_data.index, 
-                    y=perf_data['accuracy'],
-                    title=f"Accuracy by {selected_feature}",
-                    labels={'x': selected_feature, 'y': 'Accuracy'},
-                    color=perf_data['accuracy'],
-                    color_continuous_scale='RdYlGn'
-                )
-                fig.add_hline(y=perf_data['accuracy'].mean(), line_dash="dash", annotation_text="Average")
-                st.plotly_chart(fig, config={'responsive': True})
+            # Use enhanced group comparison visualizations
+            # Get fairness threshold from session state if available
+            fairness_threshold = getattr(st.session_state, 'fairness_threshold', FAIRNESS_THRESHOLD)
             
-            elif problem_type == "regression":
-                # Choose the best available metric for visualization
-                available_metrics = perf_data.columns
-                
-                # Priority order for regression metrics (most interpretable first)
-                metric_priority = ['r2', 'mae', 'rmse', 'mse']
-                selected_metric = None
-                
-                for metric in metric_priority:
-                    if metric in available_metrics:
-                        selected_metric = metric
-                        break
-                
-                if selected_metric:
-                    # Create appropriate chart based on metric type
-                    metric_display_names = {
-                        'r2': 'R² Score',
-                        'mae': 'Mean Absolute Error',
-                        'rmse': 'Root Mean Squared Error', 
-                        'mse': 'Mean Squared Error'
-                    }
-                    
-                    metric_name = metric_display_names.get(selected_metric, selected_metric.upper())
-                    
-                    # For R², higher is better (use green color scale)
-                    # For error metrics, lower is better (use reversed color scale)
-                    if selected_metric == 'r2':
-                        color_scale = 'RdYlGn'  # Red to Green
-                        color_values = perf_data[selected_metric]
-                    else:
-                        color_scale = 'RdYlGn_r'  # Green to Red (reversed)
-                        color_values = perf_data[selected_metric]
-                    
-                    fig = px.bar(
-                        x=perf_data.index,
-                        y=perf_data[selected_metric],
-                        title=f"{metric_name} by {selected_feature}",
-                        labels={'x': selected_feature, 'y': metric_name},
-                        color=color_values,
-                        color_continuous_scale=color_scale
-                    )
-                    
-                    # Add average line
-                    fig.add_hline(
-                        y=perf_data[selected_metric].mean(), 
-                        line_dash="dash", 
-                        annotation_text="Average"
-                    )
-                    
-                    st.plotly_chart(fig, config={'responsive': True})
-                    
-                    # Add interpretation helper
-                    if selected_metric == 'r2':
-                        st.caption("📊 Higher R² scores indicate better model fit for that group")
-                    else:
-                        st.caption("📊 Lower error values indicate better model performance for that group")
-                
-                # If we have multiple metrics, offer to show additional charts
-                if len([m for m in metric_priority if m in available_metrics]) > 1:
-                    with st.expander("📈 Show Additional Metric Charts", expanded=False):
-                        additional_metrics = [m for m in metric_priority if m in available_metrics and m != selected_metric]
-                        
-                        for metric in additional_metrics:
-                            metric_name = metric_display_names.get(metric, metric.upper())
-                            
-                            if metric == 'r2':
-                                color_scale = 'RdYlGn'
-                            else:
-                                color_scale = 'RdYlGn_r'
-                            
-                            fig = px.bar(
-                                x=perf_data.index,
-                                y=perf_data[metric],
-                                title=f"{metric_name} by {selected_feature}",
-                                labels={'x': selected_feature, 'y': metric_name},
-                                color=perf_data[metric],
-                                color_continuous_scale=color_scale
-                            )
-                            
-                            fig.add_hline(
-                                y=perf_data[metric].mean(),
-                                line_dash="dash",
-                                annotation_text="Average"
-                            )
-                            
-                            st.plotly_chart(fig, config={'responsive': True})
+            # Generate enhanced visualizations
+            enhanced_figs = create_enhanced_group_comparison(
+                perf_data, 
+                selected_feature, 
+                problem_type,
+                fairness_threshold=fairness_threshold
+            )
+            
+            # Display the figures
+            if enhanced_figs:
+                for fig in enhanced_figs:
+                    st.plotly_chart(fig, use_container_width=True, config={'responsive': True})
+            else:
+                st.info("Unable to generate visualizations for this feature.")
             
             # Performance table (for both classification and regression)
             display_perf = perf_data.copy()
@@ -1711,6 +2588,30 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
         - **Stakeholder Review:** Have domain experts validate your fairness conclusions
         - **Continuous Learning:** Stay updated on fairness research and regulations
         """)
+    
+    # === 9. EXPORT FAIRNESS REPORT ===
+    st.markdown("---")
+    st.markdown("### 📥 Export Fairness Report")
+    st.markdown("Save your fairness analysis in various formats for documentation and sharing.")
+    
+    export_col1, export_col2 = st.columns(2)
+    
+    # Pre-generate reports
+    json_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='json')
+    html_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='html')
+    md_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='markdown')
+
+    with export_col1:
+        report_format = st.selectbox("Select Report Format:", ["JSON", "HTML", "Markdown"], key="report_format",
+                                     help="Choose the format for your report.")
+    
+    with export_col2:
+        if report_format == "JSON":
+            st.download_button("Download JSON Report", json_report, "fairness_report.json", "application/json")
+        elif report_format == "HTML":
+            st.download_button("Download HTML Report", html_report, "fairness_report.html", "text/html")
+        elif report_format == "Markdown":
+            st.download_button("Download Markdown Report", md_report, "fairness_report.md", "text/markdown")
 
 # === MAIN RENDER FUNCTION ===
 
@@ -1799,7 +2700,7 @@ def render_fairness_analysis():
         st.stop()
     
     # Add educational content about fairness metrics
-    with st.expander("📚 Understanding Fairness Metrics for Your Model Type", expanded=False):
+    with st.expander("📚 Understanding Fairness Metrics for Your Model Type", expanded=True):
         if problem_type == "multiclass_classification":
             st.markdown("""
             ## Fairness Metrics for Multiclass Classification
