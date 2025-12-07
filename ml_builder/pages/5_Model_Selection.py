@@ -28,6 +28,46 @@ def main():
         st.session_state.builder = Builder()
         st.session_state.logger.log_stage_transition("START", "MODEL_SELECTION")
 
+    # Check for return navigation to clear automation results
+    # If the user is navigating to this page (current_stage is not MODEL_SELECTION yet)
+    # and automation was previously completed, we should clear the results to allow a fresh start
+    if (st.session_state.builder.current_stage != ModelStage.MODEL_SELECTION and 
+        st.session_state.get('automated_model_selection_training_completed', False)):
+        
+        # Clear automation state
+        if 'automated_model_selection_training_completed' in st.session_state:
+            del st.session_state.automated_model_selection_training_completed
+        if 'automated_model_selection_training_result' in st.session_state:
+            del st.session_state.automated_model_selection_training_result
+
+        # Reset model selection and training stages
+        st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = False
+        st.session_state.builder.stage_completion[ModelStage.MODEL_TRAINING] = False
+
+        # Clear training state
+        keys_to_clear = [
+            'training_complete',
+            'training_results', 
+            'selected_model_type',
+            'selected_model_stability',
+            'previous_model_selection'
+        ]
+        for key in keys_to_clear:
+            if key in st.session_state:
+                del st.session_state[key]
+
+        # Clear builder model state
+        st.session_state.builder.model = None
+
+        # Log the auto-clear action
+        st.session_state.logger.log_user_action(
+            "Automated Model Selection & Training Results Cleared",
+            {"action": "auto_clear_on_return", "reason": "return_navigation"}
+        )
+        
+        # Display a toast to inform the user
+        st.toast("Previous automation results cleared for new selection", icon="🔄")
+
     # Set current stage to MODEL_SELECTION
     st.session_state.builder.current_stage = ModelStage.MODEL_SELECTION
 
