@@ -836,19 +836,20 @@ def render_what_if_analysis():
     feature_info = create_feature_info(st.session_state.builder)
     
     # Add option to load sample data from test set
-    st.subheader("📋 Choose a Starting Point")
+    #st.subheader("📋 Choose a Starting Point")
     
     # Use session state to track if we've already loaded a random sample
     if 'random_sample_loaded' not in st.session_state:
         st.session_state.random_sample_loaded = False
         
-    starting_point_option = st.radio(
-        "Select a starting point for your analysis:",
-        ["Start from scratch", "Load a random test sample"],
-        index=0,
-        horizontal=True,
-        key="starting_point_option"
-    )
+    #starting_point_option = st.radio(
+    #    "Select a starting point for your analysis:",
+    #    ["Start from scratch", "Load a random test sample"],
+    #    index=0,
+    #    horizontal=True,
+    #    key="starting_point_option"
+    #)
+    starting_point_option = "Start from scratch"
     
     initial_values = {}
     
