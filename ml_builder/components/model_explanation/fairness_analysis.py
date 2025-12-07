@@ -630,7 +630,7 @@ def create_interactive_impact_visualization(fairness_score, fairness_results, pr
             'Monthly Impact',
             'Risk Level',
             'Annual Projection',
-            'Bias Breakdown by Feature'
+            'Fairness Score by Feature'
         ),
         specs=[
             [{'type': 'bar'}, {'type': 'indicator'}],
@@ -659,7 +659,7 @@ def create_interactive_impact_visualization(fairness_score, fairness_results, pr
         go.Indicator(
             mode="gauge+number+delta",
             value=fairness_score,
-            title={'text': f"Fairness Score"},
+            title={'text': f"Overall Fairness"},
             delta={'reference': FAIRNESS_THRESHOLD, 'increasing': {'color': colors['good']}},
             gauge={
                 'axis': {'range': [0, 1]},
@@ -2532,7 +2532,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
             display_perf = perf_data.copy()
             if 'count' in display_perf.columns:
                 display_perf = display_perf.drop('count', axis=1)
-            st.dataframe(display_perf.style.format("{:.3f}"), width='stretch')
+            st.dataframe(display_perf.style.format("{:.3f}"), use_container_width=True)
             
             # Show group distribution (for both classification and regression)
             if 'count' in perf_data.columns:
@@ -2547,7 +2547,7 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
                         "Percentage": f"{percentage:.1f}%"
                     })
                 
-                st.dataframe(pd.DataFrame(dist_data), width='stretch', hide_index=True)
+                st.dataframe(pd.DataFrame(dist_data), use_container_width=True, hide_index=True)
 
     st.markdown("---")
 
@@ -2594,24 +2594,24 @@ def create_comprehensive_fairness_dashboard(fairness_results, problem_type, colu
     st.markdown("### 📥 Export Fairness Report")
     st.markdown("Save your fairness analysis in various formats for documentation and sharing.")
     
-    export_col1, export_col2 = st.columns(2)
+    #export_col1, export_col2 = st.columns(2)
     
     # Pre-generate reports
     json_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='json')
     html_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='html')
     md_report = export_fairness_report(fairness_results, problem_type, columns_to_analyse, format='markdown')
 
-    with export_col1:
-        report_format = st.selectbox("Select Report Format:", ["JSON", "HTML", "Markdown"], key="report_format",
+    #with export_col1:
+    report_format = st.selectbox("Select Report Format:", ["JSON", "HTML", "Markdown"], key="report_format",
                                      help="Choose the format for your report.")
     
-    with export_col2:
-        if report_format == "JSON":
-            st.download_button("Download JSON Report", json_report, "fairness_report.json", "application/json")
-        elif report_format == "HTML":
-            st.download_button("Download HTML Report", html_report, "fairness_report.html", "text/html")
-        elif report_format == "Markdown":
-            st.download_button("Download Markdown Report", md_report, "fairness_report.md", "text/markdown")
+    #with export_col2:
+    if report_format == "JSON":
+        st.download_button("Download JSON Report", json_report, "fairness_report.json", "application/json")
+    elif report_format == "HTML":
+        st.download_button("Download HTML Report", html_report, "fairness_report.html", "text/html")
+    elif report_format == "Markdown":
+        st.download_button("Download Markdown Report", md_report, "fairness_report.md", "text/markdown")
 
 # === MAIN RENDER FUNCTION ===
 
