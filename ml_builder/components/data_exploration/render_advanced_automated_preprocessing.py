@@ -561,6 +561,9 @@ def render_advanced_automated_preprocessing():
                                         if 'protected_attributes' in fs_details:
                                             feature_selection_summary['protected_attributes'] = fs_details['protected_attributes']
 
+                                        if 'removed_features_stats' in fs_details:
+                                            feature_selection_summary['removed_features_stats'] = fs_details['removed_features_stats']
+
                                         st.session_state.logger.log_journey_point(
                                             stage="DATA_EXPLORATION",
                                             decision_type="ADVANCED_AUTO_FEATURE_SELECTION_COMPLETED",

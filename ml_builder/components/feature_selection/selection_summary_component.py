@@ -6,6 +6,7 @@ and stage completion for the feature selection process.
 """
 
 import streamlit as st
+import pandas as pd
 from typing import Dict, Any, Optional
 from Builder import ModelStage
 from utils.dataset_overview import DatasetOverviewComponent
@@ -229,6 +230,48 @@ class SelectionSummaryComponent:
                 },
                 parent_id=None
             )
+
+            # --- NEW JOURNEY POINT: Removed Feature Statistics ---
+            # Calculate and log statistics for features that were removed
+            original_data = None
+            if self.state_manager and 'original_feature_data' in st.session_state:
+                original_data = st.session_state.original_feature_data.get('training_data')
+
+            if original_data is not None and completion_metrics["removed_features_all"]:
+                removed_feature_stats = {}
+                
+                for feature in completion_metrics["removed_features_all"]:
+                    if feature in original_data.columns:
+                        # Get the feature data
+                        series = original_data[feature]
+                        
+                        # Calculate statistics based on type
+                        stats = {}
+                        if pd.api.types.is_numeric_dtype(series):
+                            stats = {
+                                "min": float(series.min()),
+                                "max": float(series.max()),
+                                "mean": float(series.mean()),
+                                "std": float(series.std()) if len(series) > 1 else 0.0
+                            }
+                        else:
+                            # For categorical/other types, just record basic info
+                            stats = {
+                                "unique_values": int(series.nunique()),
+                                "most_common": str(series.mode().iloc[0]) if not series.mode().empty else "N/A"
+                            }
+                        
+                        removed_feature_stats[feature] = stats
+
+                if removed_feature_stats:
+                    self.logger.log_journey_point(
+                        stage="FEATURE_SELECTION",
+                        decision_type="REMOVED_FEATURE_STATISTICS",
+                        description="Statistics of removed features",
+                        details=removed_feature_stats,
+                        parent_id=None
+                    )
+            # -----------------------------------------------------
 
         # Navigate to next page
         st.switch_page("pages/5_Model_Selection.py")

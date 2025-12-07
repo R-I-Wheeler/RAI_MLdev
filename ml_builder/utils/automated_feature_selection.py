@@ -128,7 +128,8 @@ class AutomatedFeatureSelectionComponent:
             'duplicates_stats': {},
             'boruta_applied': False,
             'boruta_stats': {},
-            'boruta_removed_details': {}  # {feature: {'importance': score, 'status': text}}
+            'boruta_removed_details': {},  # {feature: {'importance': score, 'status': text}}
+            'removed_features_stats': {}  # {feature: {min, max, mean, std, etc.}}
         }
 
         # Validate initial state
@@ -391,6 +392,10 @@ class AutomatedFeatureSelectionComponent:
                 })
                 return
 
+            # Calculate stats for features before removing them
+            feature_stats = self._calculate_feature_stats(features_to_remove)
+            self.selection_summary['removed_features_stats'].update(feature_stats)
+
             # Remove features from both training and testing data
             self.builder.X_train = self.builder.X_train.drop(columns=features_to_remove)
             self.builder.X_test = self.builder.X_test.drop(columns=features_to_remove)
@@ -574,6 +579,10 @@ class AutomatedFeatureSelectionComponent:
                     if self.show_analysis:
                         st.write("  → No features recommended for removal, stopping")
                     break
+
+                # Calculate stats for features before removing them
+                feature_stats = self._calculate_feature_stats(features_to_remove)
+                self.selection_summary['removed_features_stats'].update(feature_stats)
 
                 # Remove features from both training and testing data
                 self.builder.X_train = self.builder.X_train.drop(columns=features_to_remove)
@@ -924,6 +933,10 @@ class AutomatedFeatureSelectionComponent:
                     }
                 })
                 return
+
+            # Calculate stats for features before removing them
+            feature_stats = self._calculate_feature_stats(features_to_remove)
+            self.selection_summary['removed_features_stats'].update(feature_stats)
 
             # Remove features from both training and testing data
             self.builder.X_train = self.builder.X_train.drop(columns=features_to_remove)
@@ -1576,3 +1589,66 @@ class AutomatedFeatureSelectionComponent:
         report += self._generate_feature_removal_summary()
 
         return report
+
+    def _calculate_feature_stats(self, features_to_remove: List[str]) -> Dict[str, Dict]:
+        """
+        Calculate basic statistics for features before they are removed.
+        
+        Args:
+            features_to_remove: List of feature names to calculate stats for
+            
+        Returns:
+            Dictionary of feature stats keyed by feature name
+        """
+        stats = {}
+        
+        # Use training data for statistics
+        df = self.builder.X_train
+        
+        for feature in features_to_remove:
+            if feature not in df.columns:
+                continue
+                
+            try:
+                # Get series
+                series = df[feature]
+                
+                # Basic descriptive stats
+                feat_stats = {
+                    'min': None,
+                    'max': None,
+                    'mean': None,
+                    'std': None,
+                    'missing_pct': float((series.isnull().sum() / len(series)) * 100),
+                    'zero_pct': 0.0
+                }
+                
+                # Handle numeric data
+                if pd.api.types.is_numeric_dtype(series):
+                    feat_stats['min'] = float(series.min()) if not pd.isna(series.min()) else None
+                    feat_stats['max'] = float(series.max()) if not pd.isna(series.max()) else None
+                    feat_stats['mean'] = float(series.mean()) if not pd.isna(series.mean()) else None
+                    feat_stats['std'] = float(series.std()) if not pd.isna(series.std()) else None
+                    
+                    # Calculate zero percentage for numeric
+                    if len(series) > 0:
+                        zero_count = (series == 0).sum()
+                        feat_stats['zero_pct'] = float((zero_count / len(series)) * 100)
+                
+                # Handle categorical/object data (limited stats)
+                else:
+                    # For categorical, min/max might correspond to alphabetical order or length
+                    # but typically we just capture unique count or mode
+                    try:
+                        feat_stats['unique_count'] = series.nunique()
+                        feat_stats['mode'] = str(series.mode().iloc[0]) if not series.mode().empty else None
+                    except:
+                        pass
+                
+                stats[feature] = feat_stats
+                
+            except Exception as e:
+                # Don't fail the whole process if stats calculation fails for one feature
+                stats[feature] = {'error': str(e)}
+                
+        return stats
