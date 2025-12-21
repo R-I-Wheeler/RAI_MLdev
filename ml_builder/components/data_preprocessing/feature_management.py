@@ -2,9 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+import re
 from sklearn.preprocessing import LabelEncoder
 from typing import Dict, Any, Optional
-
 from components.data_exploration.feature_analysis import get_visualisation_info, show_feature_analysis
 from utils.dataframe_comparison import DataframeComparisonComponent
 from utils.data_exploration_component import DataExplorationComponent
@@ -409,10 +409,38 @@ class FeatureManagementComponent:
         # Filter out the target column from the options
         column_options = [col for col in self.data.columns 
                          if col != self.target_column]
+        
+        # Auto-detect potential index columns based on common naming patterns
+        # This uses whole-word and separator-aware matching so that columns like
+        # "customer_id" or "row_index" are detected, but words such as "dioxide"
+        # (which merely contain the letters "id") are not.
+        index_terms = {"id", "index", "key", "num", "code", "uuid", "row", "rownumber", "customerid", "code"}
+        auto_detected_cols = []
+
+        for col in column_options:
+            col_lower = col.lower().strip()
+
+            # Exact match on common index-like names
+            if col_lower in index_terms:
+                auto_detected_cols.append(col)
+                continue
+
+            # Split on common separators (underscores, spaces, hyphens, dots)
+            tokens = [t for t in re.split(r"[_\s\-.]+", col_lower) if t]
+
+            # If any whole token matches an index term, treat as index-like
+            if any(token in index_terms for token in tokens):
+                auto_detected_cols.append(col)
+
+        # Show info about auto-detected columns
+        if auto_detected_cols:
+            st.info(f"🔍 Auto-detected {len(auto_detected_cols)} potential index column(s): {', '.join(auto_detected_cols)}")
+
         cols_to_remove = st.multiselect(
             "Select columns to remove",
             column_options,
-            help="Select any columns you want to remove from the dataset"
+            default=auto_detected_cols,
+            help="Columns whose names look like IDs or indices (e.g. 'id', 'user_id', 'row_index', 'customer_code') are automatically selected"
         )
         
         if cols_to_remove:

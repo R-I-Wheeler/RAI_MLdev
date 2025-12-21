@@ -28,6 +28,7 @@ Features:
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+import re
 from Builder import ModelStage
 from utils.automated_preprocessing import AutomatedPreprocessingComponent
 from utils.automated_feature_selection import AutomatedFeatureSelectionComponent
@@ -295,7 +296,7 @@ def render_advanced_automated_preprocessing():
         - Timestamp columns (if not relevant for prediction)
         - Other unique identifiers
 
-        You can also remove any columns that are not relevant for prediction.
+        You can also remove any columns that are not relevant for prediction based on your analysis.
         """)
 
         # Get current data
@@ -305,14 +306,25 @@ def render_advanced_automated_preprocessing():
         available_columns = [col for col in original_data.columns
                           if col != st.session_state.builder.target_column]
 
-        # Try to automatically identify potential ID columns
+        # Try to automatically identify potential ID/index columns using
+        # whole-word and separator-aware matching (to avoid matching
+        # arbitrary substrings).
         potential_id_cols = []
+        index_terms = {"id", "index", "key", "num", "code", "uuid", "row", "rownumber", "customerid", "code"}
+
         for col in available_columns:
-            # Check if column name contains common ID indicators
-            if any(id_term in col.lower() for id_term in ['id', 'index', 'key', 'num', 'code', 'uuid']):
+            col_lower = col.lower().strip()
+
+            # Exact match on common index-like names
+            if col_lower in index_terms:
                 potential_id_cols.append(col)
-            # Check if column has unique values
-            elif original_data[col].nunique() == len(original_data):
+                continue
+
+            # Split on common separators (underscores, spaces, hyphens, dots)
+            tokens = [t for t in re.split(r"[_\s\-.]+", col_lower) if t]
+
+            # If any whole token matches an index term, treat as index-like
+            if any(token in index_terms for token in tokens):
                 potential_id_cols.append(col)
 
         # Create multiselect with potential ID columns pre-selected
