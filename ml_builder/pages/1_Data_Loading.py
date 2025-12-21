@@ -391,6 +391,12 @@ def main():
                                 }
                                 st.session_state.encoding_mappings[target_column] = mapping_info
                                 st.session_state.builder.encoding_mappings[target_column] = mapping_info
+                            else:
+                                # Convert float values to int for multiclass classification
+                                # This prevents errors later in the application when float classes are used
+                                if target_data.dtype in [np.float32, np.float64, float]:
+                                    st.session_state.builder.data[target_column] = target_data.astype(int)
+                                    st.info(f"ℹ️ Converted float target values to integers for multiclass classification.")
                             
                             is_multiclass = True
                             can_proceed = True
