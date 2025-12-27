@@ -9,6 +9,7 @@ from sklearn.metrics import (
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Dict, Any, Tuple
+from content.content_manager import ContentManager
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -573,12 +574,32 @@ def display_binary_threshold_results(optimal_threshold: float, results: Dict, y_
     # Threshold curve plot
     st.subheader("📈 Threshold Analysis Curves")
     
+    # Add explanation
+    content_manager = ContentManager()
+    explanation = content_manager.get_calculation_explanation("threshold_tuning_curves")
+    with st.expander("ℹ️ How to interpret this chart"):
+        st.markdown(explanation["method"])
+        st.markdown(explanation["interpretation"])
+    
     fig = create_threshold_curves_binary(results, optimal_threshold)
     st.plotly_chart(fig, config={'responsive': True}, key="binary_threshold_curves")
     
     # ROC and PR curves if requested
     if show_curves:
         st.subheader("📊 ROC and Precision-Recall Curves")
+        
+        # Add explanation
+        roc_explanation = content_manager.get_calculation_explanation("roc_curve")
+        pr_explanation = content_manager.get_calculation_explanation("precision_recall_curve")
+        
+        with st.expander("ℹ️ How to interpret these curves"):
+            st.markdown("### ROC Curve")
+            st.markdown(roc_explanation["method"])
+            st.markdown(roc_explanation["interpretation"])
+            st.markdown("---")
+            st.markdown("### Precision-Recall Curve")
+            st.markdown(pr_explanation["method"])
+            st.markdown(pr_explanation["interpretation"])
         
         roc_pr_fig = create_roc_pr_curves_binary(y_true, y_prob, optimal_threshold)
         st.plotly_chart(roc_pr_fig, config={'responsive': True}, key="binary_roc_pr_curves")

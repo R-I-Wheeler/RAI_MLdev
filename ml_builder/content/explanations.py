@@ -8,6 +8,36 @@ machine learning calculations and metrics.
 from typing import Dict
 
 CALCULATION_EXPLANATIONS = {
+    "threshold_tuning_curves": {
+        "method": """
+            **Threshold Tuning Curves**
+            - Visualizes how different performance metrics change as you vary the decision threshold
+            - **X-axis**: Decision Threshold (probability cutoff for "Positive" prediction)
+            - **Y-axis**: Metric Score (0 to 1)
+            - Helps you find the "sweet spot" that best meets your business goals
+        """,
+        "interpretation": """
+            **How to Read the Results:**
+            
+            **Key Trade-offs:**
+            - **As Threshold Increases (Moving Right):**
+              * **Precision** usually goes UP (fewer false alarms)
+              * **Recall** usually goes DOWN (miss more actual positives)
+              * **Specificity** goes UP (better at identifying negatives)
+            
+            - **As Threshold Decreases (Moving Left):**
+              * **Recall** usually goes UP (catch more positives)
+              * **Precision** usually goes DOWN (more false alarms)
+            
+            **Finding the Optimal Point:**
+            - **F1 Score Peak**: Best balance of Precision and Recall
+            - **Crossing Points**: Where different metrics intersect (e.g., Precision = Recall)
+            - **Plateaus**: Ranges where metrics are stable (robust choices)
+            
+            **Vertical Dashed Line:** 
+            - Shows the mathematically optimal threshold based on your chosen criterion
+        """
+    },
     "feature_importance": {
         "method": """
             **Feature Importance Analysis**
