@@ -646,17 +646,20 @@ def main():
                             st.rerun()
                 
                 with nav_button_cols[1]:
-                     if st.button("Skip Feature Creation ↠", width='stretch', help="Skip feature creation and go directly to data types"):
-                        # Log stage transition
-                        st.session_state.logger.log_stage_transition(
-                            step_sequence[current_step]['label'],
-                            "Data Types"
-                        )
-                        st.session_state.skipped_feature_creation = True
-                        st.session_state.preprocessing_step = 'data_types'
-                        st.session_state.scroll_to_top = True
-                        st.rerun()
-
+                    if can_proceed:
+                         if st.button("Skip Feature Creation ↠", width='stretch', help="Skip feature creation and go directly to data types"):
+                            # Log stage transition
+                            st.session_state.logger.log_stage_transition(
+                                step_sequence[current_step]['label'],
+                                "Data Types"
+                            )
+                            st.session_state.skipped_feature_creation = True
+                            st.session_state.preprocessing_step = 'data_types'
+                            st.session_state.scroll_to_top = True
+                            st.rerun()
+                    else:
+                        st.button("Skip Feature Creation ↠", width='stretch', disabled=True, help="Please apply categorical encoding before continuing")
+                                  
                 with nav_button_cols[2]:
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
