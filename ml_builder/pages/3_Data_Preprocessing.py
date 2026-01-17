@@ -4,6 +4,7 @@ from app import create_sidebar_navigation
 from utils.logging.journey_viewer import render_journey_viewer
 from utils.logging.log_viewer import render_log_viewer
 import time
+from datetime import datetime
 from streamlit_scroll_to_top import scroll_to_here
 import numpy as np
 
@@ -78,6 +79,29 @@ def main():
     
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
+
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "DATA_PREPROCESSING",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Data Preprocessing",
+            "description": "Prepare your data by handling missing values, encoding categories, managing outliers, and creating robust train/test splits before modeling.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
     
     st.header(stage_info["title"])
     st.write(stage_info["description"])

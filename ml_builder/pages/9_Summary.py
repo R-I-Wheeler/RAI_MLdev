@@ -7,7 +7,7 @@ from utils.logging.log_viewer import render_log_viewer
 from utils.logging.journey_viewer import render_journey_viewer
 import json
 import plotly.graph_objects as go
-
+from datetime import datetime
 
 def get_current_problem_type():
     """Get the current problem type from session state with fallback to builder model."""
@@ -770,6 +770,29 @@ def main():
     
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
+
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "SUMMARY",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Summary",
+            "description": "Review your full ML development journey, download artifacts, and export a reproducible model recreation script.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
     
     # Log page state
     st.session_state.logger.log_page_state("Summary", {

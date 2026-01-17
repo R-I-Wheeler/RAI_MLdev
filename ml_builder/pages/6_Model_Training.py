@@ -9,6 +9,7 @@ from components.model_training.training_results import display_search_training_r
 from components.model_training.calibration import display_calibration_section
 from components.model_training.threshold_analysis import display_threshold_analysis_section
 from components.model_training.utils.training_state_manager import TrainingStateManager
+from datetime import datetime
 
 def display_training_results(results):
     """Display the training results analysis and visualisations."""
@@ -106,6 +107,29 @@ def main():
     
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
+
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "MODEL_TRAINING",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Model Training",
+            "description": "Configure hyperparameter optimisation and train your selected model with cross-validation.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
     
     # Use logger from session state
     st.session_state.logger.log_page_state("Data_Loading", {

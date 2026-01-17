@@ -11,6 +11,7 @@ from components.model_evaluation.sample_predictions import display_sample_predic
 from components.model_evaluation.model_health import display_model_improvements
 from utils.data_exploration_component import DataExplorationComponent
 from components.data_preprocessing.categorical_encoding import CategoricalEncodingComponent
+from datetime import datetime
 
 def display_dataset_overview():
     st.header("📊 Dataset Overview")
@@ -82,6 +83,29 @@ def main():
     
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
+
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "MODEL_EVALUATION",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Model Evaluation",
+            "description": "Evaluate your trained model on the test data, review metrics and visualisations, and assess model health.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
     
     st.header(stage_info["title"])
     st.write(stage_info["description"])

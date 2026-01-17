@@ -8,6 +8,7 @@ from utils.logging.log_viewer import render_log_viewer
 import os
 from utils.dataset_overview import DatasetOverviewComponent
 import magic  # for mime type checking
+from datetime import datetime
 
 def validate_csv_file(file):
     """
@@ -70,6 +71,29 @@ def main():
     
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
+    
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "DATA_LOADING",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Data Loading",
+            "description": "Securely load your dataset, validate its structure, and select the target variable to begin the ML workflow.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
     
     st.header(stage_info["title"])
     st.write(stage_info["description"])

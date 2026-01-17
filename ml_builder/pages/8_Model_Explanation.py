@@ -88,6 +88,29 @@ def main():
     # Get and render stage info
     stage_info = st.session_state.builder.get_current_stage_info()
 
+    # Edge case handling: occasionally stage_info may not be ready on first call (e.g., on refresh)
+    if not stage_info:
+        if 'logger' in st.session_state:
+            st.session_state.logger.log_error(
+                "Stage Info Fetch - Retry",
+                {
+                    "stage": "MODEL_EXPLANATION",
+                    "reason": "stage_info was None or empty on first attempt",
+                    "timestamp": datetime.now().isoformat()
+                }
+            )
+        # Retry fetching once
+        stage_info = st.session_state.builder.get_current_stage_info()
+
+    # As a final safeguard, ensure stage_info has the expected structure
+    if not stage_info:
+        stage_info = {
+            "title": "Model Explanation",
+            "description": "Explore global and local explanations, fairness, what-if scenarios, and model limitations to understand how your model behaves.",
+            "requirements": [],
+            "ethical_considerations": []
+        }
+
     # Enhanced logging for page state
     st.session_state.logger.log_page_state("Model_Explanation", {
         "stage": "MODEL_EXPLANATION",
@@ -98,8 +121,8 @@ def main():
     })
     
     if stage_info:
-        st.header(stage_info.get("title", "Model Training"))
-        st.write(stage_info.get("description", "Train your model with automated hyperparameter tuning."))
+        st.header(stage_info.get("title", "Model Explanation"))
+        st.write(stage_info.get("description", "Explore model explanations, fairness, and what-if scenarios."))
         
         with st.expander("Functionality"):
             requirements = stage_info.get("requirements", [])
