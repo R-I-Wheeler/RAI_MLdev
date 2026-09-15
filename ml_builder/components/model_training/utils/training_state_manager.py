@@ -11,13 +11,13 @@ class TrainingStateManager:
 
     # Define memory-heavy components to track
     MEMORY_HEAVY_KEYS = [
-        'training_results',
         'cv_results',
         'optuna_studies',
         'calibration_models',
         'large_visualizations',
         'model_predictions',
-        'feature_importance_data'
+        'feature_importance_data',
+        'training_predictions_cache', 'training_prediction_models', 'training_metrics_cache'
     ]
 
     # Maximum number of cached items to keep
@@ -131,6 +131,7 @@ class TrainingStateManager:
             'imbalance_handled',
             'imbalance_skipped',
             'training_predictions_cache',
+            'training_prediction_models',
             'training_metrics_cache'
         ]
 
@@ -192,7 +193,8 @@ class TrainingStateManager:
         """Generate a hash for the current model to use as cache key."""
         try:
             model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
-            model_params = str(model.get_params()) if hasattr(model, 'get_params') else str(model)
+            model_params = repr((st.session_state.builder.model.get('training_run', {}).get('run_id'),
+                                 id(model), model.get_params() if hasattr(model, 'get_params') else str(model)))
             return hashlib.md5(model_params.encode()).hexdigest()[:8]
         except:
             return "unknown"
@@ -201,10 +203,9 @@ class TrainingStateManager:
     def get_data_hash() -> str:
         """Generate a hash for the current dataset to use as cache key."""
         try:
-            X_shape = st.session_state.builder.X_test.shape
-            y_shape = len(st.session_state.builder.y_test)
-            data_signature = f"{X_shape}_{y_shape}"
-            return hashlib.md5(data_signature.encode()).hexdigest()[:8]
+            from components.model_training.utils.validation_utils import data_fingerprint
+            builder = st.session_state.builder
+            return data_fingerprint(builder.X_test, builder.y_test)
         except:
             return "unknown"
 
@@ -325,6 +326,7 @@ class TrainingStateManager:
         """Clear all component-specific caches."""
         cache_keys = [
             'training_predictions_cache',
+            'training_prediction_models',
             'training_metrics_cache',
             'param_ranges_cache',
             'calibration_cache'
@@ -386,7 +388,8 @@ class TrainingStateManager:
                         del model_dict[key]
 
                 # Clear related caches from session state
-                cache_keys_to_clear = ['calibration_cache', 'threshold_analysis_cache']
+                cache_keys_to_clear = ['calibration_cache', 'threshold_analysis_cache',
+                                       'training_predictions_cache', 'training_prediction_models', 'training_metrics_cache']
                 for cache_key in cache_keys_to_clear:
                     if cache_key in st.session_state:
                         st.session_state[cache_key].clear()

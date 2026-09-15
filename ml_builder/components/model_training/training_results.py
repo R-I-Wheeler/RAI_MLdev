@@ -5,35 +5,6 @@ import plotly.graph_objects as go
 from components.model_training.utils.training_state_manager import TrainingStateManager
 
 
-def safe_set_params_and_fit(model, params, X_train, y_train):
-    """
-    Safely set parameters and fit a model, handling CatBoost's inability to change params after fitting.
-
-    Args:
-        model: The model instance
-        params: Parameters to set
-        X_train: Training features
-        y_train: Training target
-
-    Returns:
-        Fitted model instance (either the same model or a new one for CatBoost)
-    """
-    model_type = type(model).__name__
-
-    # CatBoost models cannot have their parameters changed after fitting
-    # We need to create a new instance instead
-    if 'CatBoost' in model_type:
-        # Create a new model instance with the desired parameters
-        model_class = type(model)
-        new_model = model_class(**params)
-        new_model.fit(X_train, y_train)
-        return new_model
-    else:
-        # For other models, we can use set_params
-        model.set_params(**params)
-        model.fit(X_train, y_train)
-        return model
-
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_architecture_analysis(param_values_hash, scores_hash, best_value_hash):
     """Cache architecture analysis to avoid recalculation"""
@@ -476,7 +447,6 @@ def display_optuna_results(results):
         st.table(metrics_df)
     
     #Save best_score to model info
-    st.session_state.builder.model['best_score'] = results['info']['best_score']
     
     # Display Optuna-specific visualizations
     #with st.expander("📈 Optimisation History", expanded=True):
@@ -498,7 +468,7 @@ def display_optuna_results(results):
             with col1:
                 st.metric(
                     "Total Trials",
-                    metrics.get('n_complete_trials', 'N/A'),
+                    metrics.get('n_complete_trials', 0) + metrics.get('n_pruned_trials', 0) + metrics.get('n_failed_trials', 0),
                     f"{metrics.get('n_pruned_trials', 0)} pruned"
                 )
             
@@ -506,7 +476,8 @@ def display_optuna_results(results):
                 # Calculate optimisation efficiency if data available
                 if ('n_complete_trials' in metrics and 'n_pruned_trials' in metrics and 
                     metrics['n_complete_trials'] > 0):  # Check for zero
-                    efficiency = (metrics['n_complete_trials'] - metrics['n_pruned_trials']) / metrics['n_complete_trials'] * 100
+                    total = metrics['n_complete_trials'] + metrics['n_pruned_trials'] + metrics.get('n_failed_trials', 0)
+                    efficiency = metrics['n_complete_trials'] / total * 100
                     st.metric(
                         "Optimisation Efficiency",
                         f"{efficiency:.1f}%",
@@ -574,19 +545,19 @@ def display_optuna_results(results):
                 params = results['info']['optimisation_history']['params']
                 scores = results['info']['optimisation_history']['values']
                 best_params = results['info']['best_params']
-                trial_numbers = list(range(len(scores)))
+                trial_numbers = results['info']['optimisation_history'].get('trial_numbers', list(range(len(scores))))
                 
                 # Add performance filter
                 st.markdown("### 🎯 Filter Trials by Performance")
                 min_score = min(scores)
                 max_score = max(scores)
-                score_range = st.slider(
-                    "Select score range to analyse:",
-                    min_value=float(min_score),
-                    max_value=float(max_score),
-                    value=(float(min_score), float(max_score)),
-                    format="%.4f"
-                )
+                if min_score == max_score:
+                    score_range = (min_score, max_score)
+                    st.caption(f"All completed trials scored {min_score:.4f}.")
+                else:
+                    score_range = st.slider(
+                        "Select score range to analyse:", min_value=float(min_score),
+                        max_value=float(max_score), value=(float(min_score), float(max_score)), format="%.4f")
                 
                 # Filter trials based on score range
                 filtered_indices = [i for i, score in enumerate(scores) 
@@ -603,7 +574,7 @@ def display_optuna_results(results):
                 """)
                 
                 # Create tabs for each parameter
-                param_tabs = st.tabs([f"📊 {param}" for param in best_params.keys()])
+                param_tabs = st.tabs([f"📊 {param}" for param in best_params.keys()]) if best_params else []
                 
                 # Process each parameter in its own tab
                 for tab, (param_name, best_value) in zip(param_tabs, best_params.items()):
@@ -729,7 +700,8 @@ def display_optuna_results(results):
                                         ))
                                         
                                         # Add trend line
-                                        z = np.polyfit(filtered_trials, numeric_values, 1)
+                                        z = (np.polyfit(filtered_trials, numeric_values, 1)
+                                             if len(filtered_trials) > 1 else [0, numeric_values[0]])
                                         p = np.poly1d(z)
                                         evolution_fig.add_trace(go.Scatter(
                                             x=filtered_trials,
@@ -952,250 +924,29 @@ def display_optuna_results(results):
                 - Focus on ranges showing promising clusters
         """)
     
-    # Update selected model type to the Optuna best model type
-    if not hasattr(st.session_state, 'selected_model_type'):
-        # Ensure the model state is properly set for Optuna results
-        st.session_state.builder.model.update({
-            "best_params": results['info']['best_params'],
-            "cv_metrics": results['info']['cv_metrics'],
-            "active_params": results['info']['best_params'],  # Set active params to best params
-            "best_model": st.session_state.builder.model['model'],  # Use the existing model
-            "active_model": st.session_state.builder.model['model'],  # Use the existing model
-            "optimisation_method": "optuna"
-        })
-        
-        with st.spinner("Selecting optimized model..."):
-            # Set the model state directly since we already have the best model
-            st.session_state.selected_model_type = "mean_score"
-            st.session_state.previous_model_selection = "mean_score"
-            st.session_state.selected_model_stability = results['info']['stability_analysis']
-            
-            # CRITICAL FIX: Ensure the Optuna model is properly configured
-            if "best_params" in st.session_state.builder.model:
-                best_params = st.session_state.builder.model["best_params"]
-                # Use safe method to handle CatBoost models
-                fitted_model = safe_set_params_and_fit(
-                    st.session_state.builder.model["model"],
-                    best_params,
-                    st.session_state.builder.X_train,
-                    st.session_state.builder.y_train
-                )
-                st.session_state.builder.model["model"] = fitted_model
-                # CRITICAL: Set the active_model reference for evaluation
-                st.session_state.builder.model["active_model"] = fitted_model
-                st.session_state.builder.model["active_params"] = best_params
-                st.session_state.builder.model["selection_type"] = "mean_score"
-                # CRITICAL: Reset calibration state when new model is active
-                TrainingStateManager.reset_calibration_state()
-            
-            st.success("✅ Optimized model selected successfully!")
 
-# Define callback function to handle model selection
 def on_model_change(results, model_options):
-    if 'selected_model_option' in st.session_state:
-        selected_type = st.session_state.selected_model_option
-        # Only trigger if selection actually changed
-        if not hasattr(st.session_state, 'previous_model_selection') or st.session_state.previous_model_selection != selected_type:
-            # Store the previous selection for comparison
-            st.session_state.previous_model_selection = selected_type
-            
-            with st.spinner(f"Selecting {model_options[selected_type]}..."):
-                result = st.session_state.builder.select_final_model(selected_type)
-                if result["success"]:
-                    # Check if this is a different model than previously selected
-                    is_new_selection = not hasattr(st.session_state, 'selected_model_type') or st.session_state.selected_model_type != selected_type
-                    st.session_state.selected_model_type = selected_type
-                    
-                    # CRITICAL FIX: Actually retrain the main model with the selected parameters
-                    if selected_type == "adjusted_score" and "adjusted_params" in st.session_state.builder.model:
-                        # Set the main model to use adjusted parameters
-                        adjusted_params = st.session_state.builder.model["adjusted_params"]
-                        # Use safe method to handle CatBoost models
-                        fitted_model = safe_set_params_and_fit(
-                            st.session_state.builder.model["model"],
-                            adjusted_params,
-                            st.session_state.builder.X_train,
-                            st.session_state.builder.y_train
-                        )
-                        st.session_state.builder.model["model"] = fitted_model
-                        # CRITICAL: Set the active_model reference for evaluation
-                        st.session_state.builder.model["active_model"] = fitted_model
-                        st.session_state.builder.model["active_params"] = adjusted_params
-                        st.session_state.builder.model["selection_type"] = "adjusted_score"
-                        # CRITICAL: Reset calibration state when new model is active
-                        TrainingStateManager.reset_calibration_state()
-
-                    elif selected_type == "mean_score" and "best_params" in st.session_state.builder.model:
-                        # Set the main model to use best parameters
-                        best_params = st.session_state.builder.model["best_params"]
-                        # Use safe method to handle CatBoost models
-                        fitted_model = safe_set_params_and_fit(
-                            st.session_state.builder.model["model"],
-                            best_params,
-                            st.session_state.builder.X_train,
-                            st.session_state.builder.y_train
-                        )
-                        st.session_state.builder.model["model"] = fitted_model
-                        # CRITICAL: Set the active_model reference for evaluation
-                        st.session_state.builder.model["active_model"] = fitted_model
-                        st.session_state.builder.model["active_params"] = best_params
-                        st.session_state.builder.model["selection_type"] = "mean_score"
-                    
-                    # Store the appropriate stability analysis
-                    if selected_type == "mean_score":
-                        st.session_state.selected_model_stability = results['info']['stability_analysis']
-                    else:  # adjusted_score
-                        if 'adjusted_stability_analysis' in results['info']:
-                            stability = results['info']['adjusted_stability_analysis']
-                            st.session_state.selected_model_stability = stability
-                        else:
-                            # Create adjusted stability analysis if it doesn't exist
-                            if 'adjusted_cv_metrics' in st.session_state.builder.model:
-                                adjusted_metrics = st.session_state.builder.model['adjusted_cv_metrics']
-                                
-                                # Create a copy of the original stability analysis
-                                import copy
-                                stability = copy.deepcopy(results['info']['stability_analysis'])
-                                
-                                # Update stability level based on adjusted metrics
-                                std_score = adjusted_metrics.get('std_score', 0)
-                                if std_score > 0.1:
-                                    stability['level'] = "High variability"
-                                elif std_score > 0.05:
-                                    stability['level'] = "Moderate stability"
-                                else:
-                                    stability['level'] = "High stability"
-                                
-                                # Update stability score
-                                stability['score'] = 1 - std_score
-                                
-                                # Create updated plots for stability analysis
-                                if 'fold_scores' in adjusted_metrics:
-                                    fold_scores = adjusted_metrics['fold_scores']
-                                    
-                                    # Create new variation plot
-                                    import plotly.graph_objects as go
-                                    
-                                    # Performance variation figure
-                                    variation_fig = go.Figure()
-                                    
-                                    # Add min-mean-max line
-                                    variation_fig.add_trace(go.Scatter(
-                                        x=['Min', 'Mean', 'Max'],
-                                        y=[adjusted_metrics['min_score'], adjusted_metrics['mean_score'], adjusted_metrics['max_score']],
-                                        mode='lines+markers',
-                                        name='Score Range',
-                                        marker=dict(size=10)
-                                    ))
-                                    
-                                    # Add error bars using actual std
-                                    variation_fig.add_trace(go.Scatter(
-                                        x=['Mean'],
-                                        y=[adjusted_metrics['mean_score']],
-                                        error_y=dict(
-                                            type='data',
-                                            array=[adjusted_metrics['std_score']],
-                                            visible=True
-                                        ),
-                                        mode='markers',
-                                        name='Standard Deviation',
-                                        marker=dict(size=12, color='red')
-                                    ))
-                                    
-                                    variation_fig.update_layout(
-                                        title='Performance Variation',
-                                        yaxis_title='Score',
-                                        showlegend=True,
-                                        height=300
-                                    )
-                                    
-                                    # Create fold comparison chart
-                                    fold_fig = go.Figure(data=go.Bar(
-                                        x=[f'Fold {i+1}' for i in range(len(fold_scores))],
-                                        y=fold_scores,
-                                        marker_color='lightblue'
-                                    ))
-                                    
-                                    fold_fig.add_hline(
-                                        y=adjusted_metrics['mean_score'],
-                                        line_dash="dash",
-                                        line_color="red",
-                                        annotation_text=f"Mean Score: {adjusted_metrics['mean_score']:.3f}"
-                                    )
-                                    
-                                    fold_fig.update_layout(
-                                        title='Performance Across Folds',
-                                        xaxis_title='Fold',
-                                        yaxis_title='Score',
-                                        showlegend=False,
-                                        height=400
-                                    )
-                                    
-                                    # Create gauge chart with standardized size
-                                    gauge_fig = go.Figure(go.Indicator(
-                                        mode="gauge+number",
-                                        value=1 - adjusted_metrics["std_score"],
-                                        title={'text': "Model Stability Score"},
-                                        gauge={
-                                            'axis': {'range': [0, 1]},
-                                            'steps': [
-                                                {'range': [0, 0.9], 'color': "lightgray"},
-                                                {'range': [0.9, 0.95], 'color': "yellow"},
-                                                {'range': [0.95, 1], 'color': "lightgreen"}
-                                            ],
-                                            'threshold': {
-                                                'line': {'color': "red", 'width': 4},
-                                                'thickness': 0.75,
-                                                'value': 1 - adjusted_metrics["std_score"]
-                                            }
-                                        }
-                                    ))
-                                    
-                                    # Standardize gauge size
-                                    gauge_fig.update_layout(
-                                        height=350,
-                                        margin=dict(l=30, r=30, t=50, b=30)
-                                    )
-                                    
-                                    # Update the plots in the stability analysis
-                                    stability['plots'] = {
-                                        'gauge': gauge_fig,
-                                        'variation': variation_fig,
-                                        'fold_comparison': fold_fig
-                                    }
-                                
-                                # Store the adjusted stability analysis
-                                results['info']['adjusted_stability_analysis'] = stability
-                                st.session_state.selected_model_stability = stability
-                            else:
-                                # Fallback to original if no adjusted metrics available
-                                stability = results['info']['stability_analysis']
-                                st.session_state.selected_model_stability = stability
-                    
-                    # Get the appropriate score value based on selected model type
-                    score_value = result["info"]["mean_score"] if selected_type == "mean_score" else result["info"]["adjusted_score"]
-                    score_type = "Mean Score" if selected_type == "mean_score" else "Adjusted Score"
-                    
-                    # Display notification if model was changed
-                    if is_new_selection:
-                        st.success(f"✨ **Model changed!** Now using model optimized for {selected_type.replace('_', ' ')} ({score_type}: {score_value:.4f})")
-                    
-                    # Log selection
-                    st.session_state.logger.log_user_action(
-                        "Model Selection",
-                        {
-                            "selection_type": selected_type,
-                            "mean_score": result["info"]["mean_score"],
-                            "std_score": result["info"]["std_score"],
-                            "adjusted_score": result["info"]["adjusted_score"],
-                            "is_new_selection": is_new_selection
-                        }
-                    )
-                    
-                    # Force a rerun to update all visualisations
-                    st.rerun()
-                else:
-                    st.error(result["message"])
+    """Activate an already fitted candidate when the selection actually changes."""
+    selected_type = st.session_state.selected_model_option
+    if selected_type == st.session_state.get('previous_model_selection'):
+        return
+    result = st.session_state.builder.select_final_model(selected_type)
+    if not result["success"]:
+        st.error(result["message"])
+        return
+    st.session_state.selected_model_type = selected_type
+    st.session_state.previous_model_selection = selected_type
+    info = results["info"]
+    stability_key = "adjusted_stability_analysis" if selected_type == "adjusted_score" else "stability_analysis"
+    stability = info.get(stability_key)
+    if stability is None:
+        from components.model_training.utils.tuning_commons import StabilityAnalyzer
+        metrics = st.session_state.builder.model["active_cv_metrics"]
+        stability = StabilityAnalyzer().create_stability_analysis(metrics, metrics["fold_scores"])
+    st.session_state.selected_model_stability = stability
+    st.session_state.logger.log_user_action("Model Selection", {
+        "selection_type": selected_type, **result["info"],
+    })
 
 def display_search_training_results(results):
     import plotly.graph_objects as go
@@ -1498,32 +1249,6 @@ def display_search_training_results(results):
         # Check if there's already a selected model
         default_option = st.session_state.selected_model_type if hasattr(st.session_state, 'selected_model_type') else "mean_score"
                             
-        # Initialize model selection on first load if needed
-        if not hasattr(st.session_state, 'selected_model_type'):
-            # Auto-select the default model on first load
-            with st.spinner(f"Selecting {model_options['mean_score']}..."):
-                result = st.session_state.builder.select_final_model("mean_score")
-                if result["success"]:
-                    st.session_state.selected_model_type = "mean_score"
-                    st.session_state.previous_model_selection = "mean_score"
-                    st.session_state.selected_model_stability = results['info']['stability_analysis']
-                    
-                    # CRITICAL FIX: Ensure the default model is properly configured
-                    if "best_params" in st.session_state.builder.model:
-                        best_params = st.session_state.builder.model["best_params"]
-                        # Use safe method to handle CatBoost models
-                        fitted_model = safe_set_params_and_fit(
-                            st.session_state.builder.model["model"],
-                            best_params,
-                            st.session_state.builder.X_train,
-                            st.session_state.builder.y_train
-                        )
-                        st.session_state.builder.model["model"] = fitted_model
-                        # CRITICAL: Set the active_model reference for evaluation
-                        st.session_state.builder.model["active_model"] = fitted_model
-                        st.session_state.builder.model["active_params"] = best_params
-                        st.session_state.builder.model["selection_type"] = "mean_score"
-        
         # Create the selectbox with callback
         st.selectbox(
             "Choose which model to use:",
@@ -1531,7 +1256,8 @@ def display_search_training_results(results):
             format_func=lambda x: model_options[x],
             index=list(model_options.keys()).index(default_option),
             key="selected_model_option",
-            on_change=on_model_change(results, model_options)
+            on_change=on_model_change,
+            args=(results, model_options)
         )
         
         # Add help text explaining the automatic selection
@@ -1549,49 +1275,6 @@ def display_search_training_results(results):
             This model will be used for the rest of your ML pipeline.
         """)
         
-        # Automatically select the model since there's only one option
-        if not hasattr(st.session_state, 'selected_model_type') or not hasattr(st.session_state, 'selected_model_stability'):
-            with st.spinner("Selecting optimal model..."):
-                result = st.session_state.builder.select_final_model("mean_score")
-                if result["success"]:
-                    # Update all necessary session state variables
-                    st.session_state.selected_model_type = "mean_score"
-                    st.session_state.previous_model_selection = "mean_score"
-                    st.session_state.selected_model_stability = results['info']['stability_analysis']
-                    
-                    # CRITICAL FIX: Ensure the single optimal model is properly configured
-                    if "best_params" in st.session_state.builder.model:
-                        best_params = st.session_state.builder.model["best_params"]
-                        # Use safe method to handle CatBoost models
-                        fitted_model = safe_set_params_and_fit(
-                            st.session_state.builder.model["model"],
-                            best_params,
-                            st.session_state.builder.X_train,
-                            st.session_state.builder.y_train
-                        )
-                        st.session_state.builder.model["model"] = fitted_model
-                        # CRITICAL: Set the active_model reference for evaluation
-                        st.session_state.builder.model["active_model"] = fitted_model
-                        st.session_state.builder.model["active_params"] = best_params
-                        st.session_state.builder.model["selection_type"] = "mean_score"
-                    
-                    # Log selection
-                    st.session_state.logger.log_user_action(
-                        "Model Selection",
-                        {
-                            "selection_type": "mean_score",
-                            "mean_score": result["info"]["mean_score"],
-                            "std_score": result["info"]["std_score"],
-                            "adjusted_score": result["info"]["adjusted_score"],
-                            "note": "Only one optimal model found"
-                        }
-                    )
-                    
-                    # Force a rerun to update all visualisations
-                    st.rerun()
-                else:
-                    st.error(result["message"])
-
     # Display CV analysis plots with explanations
     #with st.expander("📈 Cross-validation Analysis", expanded=True):
     #    st.plotly_chart(results['info']['cv_plots']['distribution'])

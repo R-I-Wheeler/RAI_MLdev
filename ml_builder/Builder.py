@@ -550,125 +550,55 @@ class Builder:
 
     """Model Training Methods"""
 
-    def auto_tune_hyperparameters(self, cv_folds: int = 5, n_iter: int = 20) -> Dict[str, Any]:
-        """Perform automated hyperparameter tuning using RandomizedSearchCV."""
-        if self.model is None:
-            return {
-                "success": False,
-                "message": "No model selected. Please select a model first."
-            }
+    def auto_tune_hyperparameters(self, cv_folds=5, n_iter=20, progress_callback=None, workers=None):
+        return self._run_tuning("random_search", cv_folds, n_iter, progress_callback, workers)
 
-        try:
-            # Use the new hyperparameter tuner
-            from components.model_training.utils.hyperparameter_tuner import HyperparameterTuner
+    def auto_tune_hyperparameters_optuna(self, cv_folds=5, n_trials=50, progress_callback=None, workers=None):
+        return self._run_tuning("optuna", cv_folds, n_trials, progress_callback, workers)
 
-            tuner = HyperparameterTuner()
-            result = tuner.tune_random_search(
-                model_dict=self.model,
-                X_train=self.X_train,
-                y_train=self.y_train,
-                cv_folds=cv_folds,
-                n_iter=n_iter
-            )
-
-            if not result["success"]:
-                return result
-
-            # Update the model with best parameters and state
-            self.model["model"] = result["best_estimator"]
-            self.model["best_params"] = result["best_params"]
-            self.model["optimisation_method"] = result["optimisation_method"]
-            self.model["cv_metrics"] = result["info"]["cv_metrics"]
-
-            # Store adjusted model information if different models exist
-            if not result["info"]["is_same_model"]:
-                # Create adjusted model
-                from copy import deepcopy
-                adjusted_model = deepcopy(self.model["model"])
-                adjusted_model.set_params(**result["info"]["adjusted_params"])
-
-                self.model["adjusted_model"] = adjusted_model
-                self.model["adjusted_params"] = result["info"]["adjusted_params"]
-                self.model["adjusted_cv_metrics"] = result["info"]["adjusted_cv_metrics"]
-            else:
-                # If they're the same, just use references to the main model
-                self.model["adjusted_model"] = self.model["model"]
-                self.model["adjusted_params"] = self.model["best_params"]
-                self.model["adjusted_cv_metrics"] = result["info"]["cv_metrics"]
-
-            # Set active model and parameters
-            self.model["active_model"] = self.model["model"]
-            self.model["active_params"] = self.model["best_params"]
-
-            # Reset calibration state when new model is active
-            self._reset_calibration_state()
-
-            return {
-                "success": True,
-                "message": result["message"],
-                "info": result["info"]
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Error during hyperparameter tuning: {str(e)}"
-            }
-
-    def auto_tune_hyperparameters_optuna(self, cv_folds: int = 5, n_trials: int = 50) -> Dict[str, Any]:
-        """Tune hyperparameters using Optuna optimisation."""
+    def _run_tuning(self, method, cv_folds, trials, progress_callback, workers):
+        """Commit a complete, fitted result atomically, preserving prior runs on failure."""
         if self.model is None or self.X_train is None or self.y_train is None:
-            return {
-                "success": False,
-                "message": "Model or training data not available"
-            }
-
+            return {"success": False, "message": "Model or training data not available"}
         try:
-            # Use the new hyperparameter tuner
+            from copy import deepcopy
+            from sklearn.base import clone
             from components.model_training.utils.hyperparameter_tuner import HyperparameterTuner
-
+            from components.model_training.utils.run_state import invalidate_predictions
             tuner = HyperparameterTuner()
-            result = tuner.tune_optuna(
-                model_dict=self.model,
-                X_train=self.X_train,
-                y_train=self.y_train,
-                cv_folds=cv_folds,
-                n_trials=n_trials
-            )
-
+            base = self.model.get("base_model", self.model.get("best_model",
+                   self.model.get("original_model", self.model["model"])))
+            base = clone(base)
+            config = dict(self.model, base_model=base)
+            if method == "random_search":
+                result = tuner.tune_random_search(config, self.X_train, self.y_train,
+                    cv_folds=cv_folds, n_iter=trials, progress_callback=progress_callback, workers=workers)
+            else:
+                result = tuner.tune_optuna(config, self.X_train, self.y_train,
+                    cv_folds=cv_folds, n_trials=trials, progress_callback=progress_callback, workers=workers)
             if not result["success"]:
                 return result
-
-            # Store the best model and optimisation method
-            # Note: The best_model from Optuna is already fitted on the full training data
-            self.model["model"] = result["best_model"]
-            self.model["best_model"] = result["best_model"]
-            self.model["best_params"] = result["best_params"]
-            self.model["optimisation_method"] = result["optimisation_method"]
-            self.model["cv_metrics"] = result["info"]["cv_metrics"]
-            self.model["selection_type"] = "optuna"  # Optuna doesn't have mean/adjusted distinction
-
-            # No need to refit - Optuna already returns a fitted model
-            # (Attempting to refit CatBoost models causes errors)
-
-            # Store active model and parameters for consistency
-            self.model["active_model"] = self.model["model"]
-            self.model["active_params"] = self.model["best_params"]
-
-            # Reset calibration state when new model is active
-            self._reset_calibration_state()
-
-            return {
-                "success": True,
-                "message": result["message"],
-                "info": result["info"]
-            }
-
-        except Exception as e:
-            return {
-                "success": False,
-                "message": f"Error during hyperparameter optimisation: {str(e)}"
-            }
+            fitted = result["best_estimator"] if method == "random_search" else result["best_model"]
+            info = result["info"]
+            updated = dict(self.model)
+            for key in ("adjusted_model", "adjusted_params", "adjusted_cv_metrics",
+                        "active_cv_metrics", "training_run"):
+                updated.pop(key, None)
+            updated.update(
+                model=fitted, best_model=fitted, active_model=fitted, base_model=base,
+                best_params=result["best_params"], active_params=result["best_params"],
+                best_score=info["best_score"], cv_metrics=info["cv_metrics"],
+                active_cv_metrics=info["cv_metrics"], optimisation_method=method,
+                selection_type="mean_score", training_run=deepcopy(info["training_run"]),
+            )
+            if method == "random_search":
+                updated.update(adjusted_model=result["adjusted_estimator"],
+                    adjusted_params=info["adjusted_params"], adjusted_cv_metrics=info["adjusted_cv_metrics"])
+            self.model = reset_model_training_state(updated)
+            invalidate_predictions(self)
+            return {"success": True, "message": result["message"], "info": info}
+        except Exception as exc:
+            return {"success": False, "message": f"Error during hyperparameter tuning: {exc}"}
 
     def analyse_class_imbalance(self) -> Dict[str, Any]:
         """
@@ -727,6 +657,8 @@ class Builder:
         # Update the model state if selection was successful
         if result.get("success") and "model_dict" in result:
             self.model = result["model_dict"]
+            from components.model_training.utils.run_state import invalidate_predictions
+            invalidate_predictions(self)
 
             # Remove the model_dict from the result to keep the interface clean
             result_clean = result.copy()

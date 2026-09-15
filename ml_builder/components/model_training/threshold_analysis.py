@@ -11,8 +11,7 @@ from plotly.subplots import make_subplots
 from typing import Dict, Any, Tuple
 from content.content_manager import ContentManager
 from components.model_training.utils.validation_utils import training_validation_predictions
-import warnings
-warnings.filterwarnings('ignore')
+from components.model_training.utils.run_state import commit_threshold, invalidate_predictions
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_threshold_analysis(model_params_hash, X_test_shape, y_test_hash, problem_type):
@@ -97,6 +96,8 @@ def display_threshold_analysis_section():
                 del st.session_state.builder.model["threshold_is_binary"]
             if "threshold_criterion" in st.session_state.builder.model:
                 del st.session_state.builder.model["threshold_criterion"]
+
+            invalidate_predictions(st.session_state.builder, clear_validation=False)
             
             st.session_state.logger.log_user_action(
                 "Threshold Reverted",
@@ -282,7 +283,7 @@ def display_threshold_analysis_section():
             st.error(f"Could not analyze current performance: {current_analysis['message']}")
 
 def analyze_current_performance() -> Dict[str, Any]:
-    """Analyze the current model performance with default threshold."""
+    """Analyze out-of-fold performance with the currently active threshold."""
     try:
         # Get model and data
         model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
@@ -300,6 +301,11 @@ def analyze_current_performance() -> Dict[str, Any]:
                 y_prob_positive = y_prob[:, 1]
             else:
                 y_prob_positive = y_prob
+
+            if st.session_state.builder.model.get('threshold_optimized'):
+                classes = np.unique(y_test)
+                threshold = st.session_state.builder.model['optimal_threshold']
+                y_pred = classes[(y_prob_positive >= threshold).astype(int)]
             
             # Calculate metrics
             accuracy = accuracy_score(y_test, y_pred)
@@ -720,10 +726,7 @@ def apply_optimal_threshold(optimal_threshold: float, is_binary: bool, criterion
             return
         
         # Store the optimal threshold in the model configuration
-        st.session_state.builder.model["optimal_threshold"] = optimal_threshold
-        st.session_state.builder.model["threshold_optimized"] = True
-        st.session_state.builder.model["threshold_is_binary"] = is_binary
-        st.session_state.builder.model["threshold_criterion"] = criterion
+        commit_threshold(st.session_state.builder, optimal_threshold, is_binary, criterion)
         
         # Log the threshold application
         st.session_state.logger.log_user_action(
@@ -761,6 +764,8 @@ def apply_optimal_threshold(optimal_threshold: float, is_binary: bool, criterion
                 del st.session_state.builder.model["threshold_is_binary"]
             if "threshold_criterion" in st.session_state.builder.model:
                 del st.session_state.builder.model["threshold_criterion"]
+
+            invalidate_predictions(st.session_state.builder, clear_validation=False)
             
             st.session_state.logger.log_user_action(
                 "Threshold Reverted",

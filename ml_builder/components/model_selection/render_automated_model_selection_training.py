@@ -727,6 +727,7 @@ def render_automation_dashboard(result):
 
                 # Build comparison table with proper optimal values
                 comparison_data = []
+                baseline_label = 'Baseline ({:g})'.format(details.get('baseline_threshold', 0.5))
                 for metric_name, baseline_value in baseline_metrics.items():
                     # Get optimal value from optimal_metrics (now includes all metrics)
                     optimal_value = optimal_metrics.get(metric_name, baseline_value)
@@ -736,7 +737,7 @@ def render_automation_dashboard(result):
 
                     comparison_data.append({
                         'Metric': metric_name.replace('_', ' ').title(),
-                        'Baseline (0.5)': f"{baseline_value:.4f}",
+                        baseline_label: f"{baseline_value:.4f}",
                         'Optimal ({:.3f})'.format(details.get('optimal_threshold', 0.5)): f"{optimal_value:.4f}",
                         'Difference': f"{difference:+.4f}",
                         'Change %': f"{difference_pct:+.2f}%"
@@ -752,12 +753,12 @@ def render_automation_dashboard(result):
                 import plotly.graph_objects as go
 
                 metrics_list = [item['Metric'] for item in comparison_data]
-                baseline_vals = [float(item['Baseline (0.5)']) for item in comparison_data]
+                baseline_vals = [float(item[baseline_label]) for item in comparison_data]
                 optimal_vals = [float(item['Optimal ({:.3f})'.format(details.get('optimal_threshold', 0.5))]) for item in comparison_data]
 
                 fig = go.Figure(data=[
                     go.Bar(
-                        name='Baseline (0.5)',
+                        name=baseline_label,
                         x=metrics_list,
                         y=baseline_vals,
                         marker_color='lightcoral',
@@ -976,7 +977,8 @@ def _generate_automation_report(result, builder) -> str:
 
         if baseline_metrics and optimal_metrics:
             report += "**Performance Comparison:**\n\n"
-            report += "| Metric | Baseline (0.5) | Optimal ({:.3f}) | Difference | Change % |\n".format(details.get('optimal_threshold', 0.5))
+            report += "| Metric | Baseline ({:g}) | Optimal ({:.3f}) | Difference | Change % |\n".format(
+                details.get('baseline_threshold', 0.5), details.get('optimal_threshold', 0.5))
             report += "|--------|---------------|-----------------|------------|----------|\n"
 
             for metric_name, baseline_value in baseline_metrics.items():

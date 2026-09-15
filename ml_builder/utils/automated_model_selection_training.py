@@ -24,8 +24,9 @@ from copy import deepcopy
 
 from content.stage_info import ModelStage
 from components.model_training.utils.validation_utils import (
-    resampling_estimator, validation_probabilities,
+    resampling_estimator, training_validation_predictions,
 )
+from components.model_training.utils.run_state import commit_calibration, commit_threshold
 
 
 class AutomatedModelSelectionTraining:
@@ -871,16 +872,24 @@ class AutomatedModelSelectionTraining:
         Args:
             is_binary: Whether this is binary classification
         """
+        # Preserve an existing committed result if validation or fitting fails.
+        self.selection_summary['calibration_applied'] = self.builder.model.get('is_calibrated', False)
+        self.selection_summary['calibration_method'] = self.builder.model.get('calibration_method', 'original')
         try:
             if self.show_analysis:
                 st.write("#### 7a. Model Calibration (Iterative Evaluation)")
 
             # Import calibration utilities
             from sklearn.calibration import CalibratedClassifierCV
+            from sklearn.model_selection import StratifiedKFold
             from sklearn.metrics import log_loss, brier_score_loss
+            from threadpoolctl import threadpool_limits
 
             # Get the current (uncalibrated) model
             original_model = self.builder.model['active_model']
+            if self.builder.model.get('is_calibrated'):
+                original_model = self.builder.model.get('original_model', original_model)
+            cv_folds = self.builder.model.get('training_run', {}).get('cv_folds', self.cv_folds or 5)
 
             # Analyze current calibration baseline
             if self.show_analysis:
@@ -891,8 +900,8 @@ class AutomatedModelSelectionTraining:
             X_train = self.builder.X_train
 
             # Get baseline predictions
-            y_pred_proba_original = validation_probabilities(
-                original_model, X_train, y_test, self.builder.model.get('resampling_method')
+            _, _, y_pred_proba_original = training_validation_predictions(
+                self.builder, model=original_model, cv_folds=cv_folds
             )
 
             # Calculate baseline metrics
@@ -928,13 +937,14 @@ class AutomatedModelSelectionTraining:
                     calibrated_model = CalibratedClassifierCV(
                         resampling_estimator(original_model, self.builder.model.get('resampling_method')),
                         method=method,
-                        cv=5  # 5-fold cross-validation for calibration
+                        cv=StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42),
+                        n_jobs=1
                     )
 
                     # Outer validation folds exclude each scored row from both
                     # calibration and estimator fitting.
-                    y_pred_proba_calibrated = validation_probabilities(
-                        calibrated_model, X_train, y_test
+                    _, _, y_pred_proba_calibrated = training_validation_predictions(
+                        self.builder, model=calibrated_model, cv_folds=cv_folds
                     )
 
                     # Calculate metrics
@@ -967,6 +977,14 @@ class AutomatedModelSelectionTraining:
                     if self.show_analysis:
                         st.warning(f"⚠️ {method.title()} calibration failed: {str(e)}")
 
+            if len(calibration_results) == 1:
+                # A failed comparison is not evidence for replacing an existing
+                # calibration with its original estimator.
+                self.selection_summary['calibration_reason'] = 'No calibration method passed validation; kept current model.'
+                if self.show_analysis:
+                    st.warning(self.selection_summary['calibration_reason'])
+                return
+
             # Select the best performing option (lowest log loss is better)
             best_option = min(
                 calibration_results.items(),
@@ -977,7 +995,8 @@ class AutomatedModelSelectionTraining:
             best_metrics = best_option[1]
 
             # Calculate improvement over baseline
-            improvement = (baseline_logloss - best_metrics['log_loss']) / baseline_logloss * 100
+            improvement = ((baseline_logloss - best_metrics['log_loss']) / baseline_logloss * 100
+                           if baseline_logloss > 0 else 0.0)
 
             # Log all calibration results
             self.logger.log_calculation(
@@ -996,12 +1015,17 @@ class AutomatedModelSelectionTraining:
 
             # Decision threshold: Only use calibration if improvement > 1%
             if best_method == 'original' or improvement < 1.0:
+                if self.builder.model['active_model'] is not original_model:
+                    commit_calibration(self.builder, original_model)
+                    self._sync_threshold_summary()
                 if self.show_analysis:
                     st.success(f"✅ Keeping original uncalibrated model (best option)")
                     st.write(f"- **Decision:** Original model performs best or improvement is minimal ({improvement:.2f}%)")
 
                 self.selection_summary['calibration_applied'] = False
                 self.selection_summary['calibration_method'] = 'original'
+                self.selection_summary.pop('calibration_cv_folds', None)
+                self.selection_summary.pop('calibration_improvement', None)
                 self.selection_summary['calibration_reason'] = f"Original model best (improvement would be {improvement:.2f}%)"
                 self.selection_summary['calibration_comparison'] = {
                     'methods_tested': list(calibration_results.keys()),
@@ -1020,6 +1044,12 @@ class AutomatedModelSelectionTraining:
                 )
 
             else:
+                # Fit before announcing success or replacing any committed state.
+                with threadpool_limits(limits=1):
+                    best_metrics['model'].fit(X_train, y_test)
+                commit_calibration(self.builder, best_metrics['model'],
+                                   original_model=original_model, method=best_method, cv_folds=cv_folds)
+                self._sync_threshold_summary()
                 # Apply the best calibration method
                 if self.show_analysis:
                     st.success(f"✅ Applying {best_method.title()} calibration")
@@ -1027,16 +1057,10 @@ class AutomatedModelSelectionTraining:
                     st.write(f"- **Original Log Loss:** {baseline_logloss:.4f}")
                     st.write(f"- **Calibrated Log Loss:** {best_metrics['log_loss']:.4f}")
 
-                # Fit the selected calibration configuration on training data only.
-                best_metrics['model'].fit(X_train, y_test)
-                # Update the model in builder with calibrated version
-                self.builder.model['active_model'] = best_metrics['model']
-                self.builder.model['is_calibrated'] = True
-                self.builder.model['calibration_method'] = best_method
-                self.builder.model['calibration_cv_folds'] = 5
-
                 self.selection_summary['calibration_applied'] = True
+                self.selection_summary.pop('calibration_reason', None)
                 self.selection_summary['calibration_method'] = best_method
+                self.selection_summary['calibration_cv_folds'] = cv_folds
                 self.selection_summary['calibration_improvement'] = improvement
                 self.selection_summary['calibration_comparison'] = {
                     'methods_tested': list(calibration_results.keys()),
@@ -1066,7 +1090,18 @@ class AutomatedModelSelectionTraining:
             )
             if self.show_analysis:
                 st.error(f"❌ Calibration error: {str(e)}")
-            self.selection_summary['calibration_applied'] = False
+            self.selection_summary['calibration_applied'] = self.builder.model.get('is_calibrated', False)
+            self.selection_summary['calibration_method'] = self.builder.model.get('calibration_method', 'original')
+
+    def _sync_threshold_summary(self):
+        """Report the threshold actually in use, including skipped/failed retries."""
+        self.selection_summary['threshold_optimized'] = self.builder.model.get('threshold_optimized', False)
+        self.selection_summary['optimal_threshold'] = self.builder.model.get('optimal_threshold', 0.5)
+        self.selection_summary['threshold_criterion'] = self.builder.model.get('threshold_criterion')
+        if not self.selection_summary['threshold_optimized']:
+            for key in ('threshold_improvement', 'threshold_criterion_internal',
+                        'baseline_metrics', 'optimal_metrics', 'baseline_threshold', 'threshold_reason'):
+                self.selection_summary.pop(key, None)
 
     def _apply_threshold_optimization(self):
         """
@@ -1075,6 +1110,7 @@ class AutomatedModelSelectionTraining:
 
         Only applicable for binary classification models.
         """
+        self._sync_threshold_summary()
         try:
             if self.show_analysis:
                 st.write("#### 7b. Threshold Optimization")
@@ -1091,8 +1127,7 @@ class AutomatedModelSelectionTraining:
 
             if not current_analysis or not current_analysis.get('success'):
                 if self.show_analysis:
-                    st.warning("Could not analyze current performance - using default 0.5")
-                self.selection_summary['threshold_optimized'] = False
+                    st.warning("Could not analyze current performance - keeping the current threshold")
                 return
 
             # Get recommended optimization criterion based on data characteristics
@@ -1129,7 +1164,9 @@ class AutomatedModelSelectionTraining:
                 recommended_criterion
             )
 
-            # Get baseline performance with default threshold (0.5)
+            # Compare with the threshold actually used by the current model.
+            baseline_threshold = (self.builder.model.get('optimal_threshold', 0.5)
+                                  if self.builder.model.get('threshold_optimized') else 0.5)
             baseline_metrics = {
                 'accuracy': current_analysis['accuracy'],
                 'precision': current_analysis['precision'],
@@ -1139,6 +1176,10 @@ class AutomatedModelSelectionTraining:
 
             # Get the metric value for the selected criterion
             baseline_value = baseline_metrics.get(criterion, baseline_metrics['f1'])
+            if criterion == 'youden':
+                tn, fp, _, _ = current_analysis['confusion_matrix'].ravel()
+                specificity = tn / (tn + fp) if tn + fp else 0.0
+                baseline_value = baseline_metrics['recall'] + specificity - 1
 
             # Get optimal threshold from results
             if criterion == 'f1':
@@ -1170,10 +1211,9 @@ class AutomatedModelSelectionTraining:
                 'f1': threshold_results['f1'][optimal_idx]
             }
 
-            # Calculate improvement (for Youden's J, we can't directly compare to baseline)
+            # Youden's J can be zero or negative, so use an absolute gain.
             if criterion == 'youden':
-                improvement = optimal_value - (baseline_metrics['recall'] + (1 - baseline_metrics['recall']) - 1)
-                improvement = max(0, improvement)
+                improvement = optimal_value - baseline_value
             else:
                 improvement = (optimal_value - baseline_value) / baseline_value if baseline_value > 0 else 0
 
@@ -1183,6 +1223,7 @@ class AutomatedModelSelectionTraining:
                 {
                     "optimal_threshold": float(optimal_threshold),
                     "default_threshold": 0.5,
+                    "baseline_threshold": float(baseline_threshold),
                     "criterion": criterion,
                     "recommended_criterion": recommended_criterion,
                     "baseline_value": float(baseline_value),
@@ -1195,19 +1236,15 @@ class AutomatedModelSelectionTraining:
             # Check if optimization provides meaningful improvement (>2%)
             if improvement < 0.02:
                 if self.show_analysis:
-                    st.info(f"ℹ️ Optimal threshold ({optimal_threshold:.3f}) provides minimal improvement ({improvement*100:.1f}%) - keeping default 0.5")
-                self.selection_summary['threshold_optimized'] = False
-                self.selection_summary['threshold_reason'] = "Minimal improvement over default"
+                    st.info(f"ℹ️ Optimal threshold ({optimal_threshold:.3f}) provides minimal improvement ({improvement*100:.1f}%) - keeping current threshold {baseline_threshold:.3f}")
+                self.selection_summary['threshold_reason'] = "Minimal improvement over current threshold"
                 return
 
             if self.show_analysis:
                 st.info(f"🎯 Applying optimal threshold: **{optimal_threshold:.3f}** (improvement: {improvement*100:.1f}%)")
 
             # Apply threshold optimization by updating model state
-            self.builder.model['threshold_optimized'] = True
-            self.builder.model['optimal_threshold'] = float(optimal_threshold)
-            self.builder.model['threshold_is_binary'] = True
-            self.builder.model['threshold_criterion'] = recommended_criterion
+            commit_threshold(self.builder, optimal_threshold, True, recommended_criterion)
 
             self.selection_summary['threshold_optimized'] = True
             self.selection_summary['optimal_threshold'] = float(optimal_threshold)
@@ -1215,6 +1252,7 @@ class AutomatedModelSelectionTraining:
             self.selection_summary['threshold_criterion_internal'] = criterion
             self.selection_summary['threshold_improvement'] = float(improvement)
             self.selection_summary['baseline_metrics'] = baseline_metrics
+            self.selection_summary['baseline_threshold'] = float(baseline_threshold)
             self.selection_summary['optimal_metrics'] = optimal_metrics_all  # Store ALL metrics, not just the optimized one
 
             # Log threshold application
@@ -1244,7 +1282,7 @@ class AutomatedModelSelectionTraining:
             )
             if self.show_analysis:
                 st.error(f"❌ Threshold optimization error: {str(e)}")
-            self.selection_summary['threshold_optimized'] = False
+            self._sync_threshold_summary()
 
     def _generate_summary(self) -> str:
         """

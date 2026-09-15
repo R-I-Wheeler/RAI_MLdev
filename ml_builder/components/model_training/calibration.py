@@ -2,12 +2,12 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
+from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import brier_score_loss
 import plotly.graph_objects as go
 from typing import Dict, Any, Tuple
 from components.model_training.utils.validation_utils import training_validation_predictions, resampling_estimator
-import warnings
-warnings.filterwarnings('ignore')
+from components.model_training.utils.run_state import commit_calibration
 
 @st.cache_data(ttl=300, show_spinner=False)
 def _cached_calibration_analysis(model_params_hash, X_test_shape, y_test_hash, problem_type):
@@ -39,6 +39,9 @@ def display_calibration_section():
         return
     
     st.header("🎯 Model Calibration (Optional)")
+    if notice := st.session_state.pop("calibration_notice", None):
+        st.info(notice)
+    st.caption("Analysis uses out-of-fold training predictions. The final test set is reserved for evaluation.")
 
     # Check problem type for targeted messaging
     problem_type = st.session_state.builder.model["problem_type"]
@@ -210,7 +213,7 @@ def display_calibration_section():
         else:
             st.error(f"Could not analyze calibration: {calibration_analysis['message']}")
 
-def analyze_current_calibration() -> Dict[str, Any]:
+def analyze_current_calibration(candidate_model=None, cv_folds=None) -> Dict[str, Any]:
     """Analyze the calibration of the current model."""
     try:
         # Use the same model access pattern as evaluation visualizations
@@ -220,7 +223,8 @@ def analyze_current_calibration() -> Dict[str, Any]:
         problem_type = st.session_state.builder.model["problem_type"]
         
         # Calibration decisions use held-out predictions within training data.
-        y_test, _, y_prob_test = training_validation_predictions(st.session_state.builder)
+        y_test, _, y_prob_test = training_validation_predictions(
+            st.session_state.builder, model=candidate_model, cv_folds=cv_folds)
         
         # Handle binary vs multiclass
         is_binary = problem_type in ["classification", "binary_classification"]
@@ -317,7 +321,7 @@ def calculate_ece_binary(y_true, y_prob, n_bins=10):
     
     ece = 0
     for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
-        in_bin = (y_prob > bin_lower) & (y_prob <= bin_upper)
+        in_bin = ((y_prob >= bin_lower) if bin_lower == 0 else (y_prob > bin_lower)) & (y_prob <= bin_upper)
         prop_in_bin = in_bin.mean()
         
         if prop_in_bin > 0:
@@ -836,24 +840,8 @@ def revert_calibration():
         # Get the original model from session state
         original_model = st.session_state.builder.model["original_model"]
         
-        # Restore the original model
-        st.session_state.builder.model["model"] = original_model
-        st.session_state.builder.model["active_model"] = original_model
-        
-        # Clean up calibration-related state
-        st.session_state.builder.model["is_calibrated"] = False
-        
-        # Remove calibration-specific keys
-        calibration_keys_to_remove = [
-            "calibrated_model", 
-            "calibration_method", 
-            "calibration_cv_folds"
-        ]
-        
-        for key in calibration_keys_to_remove:
-            if key in st.session_state.builder.model:
-                del st.session_state.builder.model[key]
-        
+        commit_calibration(st.session_state.builder, original_model)
+
         # Log the reversion
         st.session_state.logger.log_user_action(
             "Calibration Reverted",
@@ -888,48 +876,48 @@ def apply_calibration(method: str, cv_folds: int):
         original_analysis = analyze_current_calibration()
         
         with st.spinner(f"Applying {method} calibration..."):
-            model = st.session_state.builder.model["model"]
+            model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
             X_train = st.session_state.builder.X_train
             y_train = st.session_state.builder.y_train
             
             # Resample only estimator-training folds, preserving calibration folds.
             model = resampling_estimator(model, st.session_state.builder.model.get("resampling_method"))
             # Create calibrated classifier
+            calibration_cv = StratifiedKFold(n_splits=cv_folds, shuffle=True, random_state=42)
             # Handle both old and new scikit-learn API versions
             try:
                 # Try new API (sklearn >= 1.2)
                 calibrated_model = CalibratedClassifierCV(
                     estimator=model,
                     method=method,
-                    cv=cv_folds,
-                    n_jobs=-1
+                    cv=calibration_cv,
+                    n_jobs=1
                 )
             except TypeError:
                 # Fall back to old API (sklearn < 1.2)
                 calibrated_model = CalibratedClassifierCV(
                     base_estimator=model,
                     method=method,
-                    cv=cv_folds,
-                    n_jobs=-1
+                    cv=calibration_cv,
+                    n_jobs=1
                 )
             
-            # Fit the calibrated model
-            calibrated_model.fit(X_train, y_train)
+            # Validate the candidate, including nested fold sizes, before fitting
+            # or replacing either active-model reference.
+            calibrated_analysis = analyze_current_calibration(candidate_model=calibrated_model)
+            if not calibrated_analysis["success"]:
+                st.error(f"Calibration failed: {calibrated_analysis['message']}")
+                return
+            from threadpoolctl import threadpool_limits
+            with threadpool_limits(limits=1):
+                calibrated_model.fit(X_train, y_train)
             
             # Store original model and set calibrated model
-            original_model = st.session_state.builder.model["model"]
-            st.session_state.builder.model["model"] = calibrated_model
-            st.session_state.builder.model["active_model"] = calibrated_model  # Set active_model BEFORE analysis
-            
-            calibrated_analysis = analyze_current_calibration()
+            original_model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
             
             if calibrated_analysis["success"]:
-                # Store both models (active_model already set above)
-                st.session_state.builder.model["original_model"] = original_model
-                st.session_state.builder.model["calibrated_model"] = calibrated_model
-                st.session_state.builder.model["is_calibrated"] = True
-                st.session_state.builder.model["calibration_method"] = method
-                st.session_state.builder.model["calibration_cv_folds"] = cv_folds
+                commit_calibration(st.session_state.builder, calibrated_model,
+                                   original_model=original_model, method=method, cv_folds=cv_folds)
                 
                 # Log the calibration
                 st.session_state.logger.log_user_action(
@@ -975,7 +963,6 @@ def apply_calibration(method: str, cv_folds: int):
                     
             else:
                 # Revert on error
-                st.session_state.builder.model["model"] = original_model
                 st.error(f"Calibration failed: {calibrated_analysis['message']}")
                 
     except Exception as e:

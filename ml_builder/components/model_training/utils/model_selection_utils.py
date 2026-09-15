@@ -32,9 +32,17 @@ def select_final_model(model_dict: Dict[str, Any], selection_type: str = "mean_s
         # Create a copy to avoid modifying the original
         updated_model = model_dict.copy()
 
+        if selection_type not in {'mean_score', 'adjusted_score'}:
+            raise ValueError('Unknown model selection type.')
+        # Keep both fitted candidates intact; model remains the active alias for
+        # downstream consumers that predate active_model.
+        mean_model = updated_model.get('best_model', updated_model.get('original_model', updated_model['model']))
+        updated_model['best_model'] = mean_model
+
         if selection_type == "adjusted_score":
             # Use the model optimized for stability
             updated_model["active_model"] = updated_model["adjusted_model"]
+            updated_model["model"] = updated_model["adjusted_model"]
             updated_model["active_params"] = updated_model["adjusted_params"]
             updated_model["active_cv_metrics"] = updated_model["adjusted_cv_metrics"]
             updated_model["selection_type"] = "adjusted_score"
@@ -61,7 +69,8 @@ def select_final_model(model_dict: Dict[str, Any], selection_type: str = "mean_s
             }
         else:
             # Use the model optimized for mean score (default)
-            updated_model["active_model"] = updated_model["model"]
+            updated_model["active_model"] = mean_model
+            updated_model["model"] = mean_model
             updated_model["active_params"] = updated_model["best_params"]
             updated_model["active_cv_metrics"] = updated_model["cv_metrics"]
             updated_model["selection_type"] = "mean_score"
@@ -134,7 +143,8 @@ def reset_model_training_state(model_dict: Dict[str, Any]) -> Dict[str, Any]:
 
         # Clear related caches from session state if available
         try:
-            cache_keys_to_clear = ['calibration_cache', 'threshold_analysis_cache']
+            cache_keys_to_clear = ['calibration_cache', 'threshold_analysis_cache',
+                                   'training_predictions_cache', 'training_prediction_models', 'training_metrics_cache']
             for cache_key in cache_keys_to_clear:
                 if (hasattr(st, 'session_state') and
                         hasattr(st.session_state, cache_key)):

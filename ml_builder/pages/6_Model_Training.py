@@ -10,6 +10,7 @@ from components.model_training.calibration import display_calibration_section
 from components.model_training.threshold_analysis import display_threshold_analysis_section
 from components.model_training.utils.training_state_manager import TrainingStateManager
 from datetime import datetime
+from components.model_training.utils.validation_utils import worker_budget
 
 def display_training_results(results):
     """Display the training results analysis and visualisations."""
@@ -42,21 +43,40 @@ def display_training_results(results):
         """)
         # Don't return here, just warn - some parts might still work
     
-    # Check if this is a new training run (different from previous) and reset selection state if so
-    if 'previous_training_id' not in st.session_state or st.session_state.previous_training_id != id(results):
-        # Store the current training results ID
-        st.session_state.previous_training_id = id(results)
-        
-        # Reset model selection state variables to force fresh selection
-        if 'selected_model_type' in st.session_state:
-            del st.session_state.selected_model_type
-        if 'selected_model_stability' in st.session_state:
-            del st.session_state.selected_model_stability
-        if 'previous_model_selection' in st.session_state:
-            del st.session_state.previous_model_selection
-    
+    # Reading results never refits or changes the active candidate.
+    run = results["info"].get("training_run", {})
+    run_id = run.get("run_id", id(results))
+    if st.session_state.get("previous_training_id") != run_id:
+        st.session_state.previous_training_id = run_id
+        st.session_state.pop("selected_model_option", None)
+    selected = st.session_state.builder.model.get("selection_type", "mean_score")
+    selected = selected if selected in {"mean_score", "adjusted_score"} else "mean_score"
+    st.session_state.selected_model_type = selected
+    st.session_state.previous_model_selection = selected
+    stability_key = "adjusted_stability_analysis" if selected == "adjusted_score" else "stability_analysis"
+    st.session_state.selected_model_stability = results["info"].get(stability_key, results["info"]["stability_analysis"])
+
     st.header("Training Results Analysis")
     
+    if run:
+        st.caption(f"Run {run['run_id'][:8]} · {run['optimisation_method']} · "
+                   f"{run['cv_folds']} folds · {run.get('evaluated_trials', run['requested_trials'])} configurations evaluated · "
+                   f"Scoring: {run['scoring']}")
+        st.caption("Validation covers the supplied features. Earlier preprocessing and feature selection "
+                   "are not refitted within these folds; use the final test set for final evaluation.")
+    else:
+        st.caption("Saved results from an earlier run; original validation settings have not been changed.")
+    diagnostics = results["info"].get("diagnostics", {})
+    if diagnostics:
+        with st.expander("Training diagnostics"):
+            st.write(f"Completed: {diagnostics.get('completed', 0)} · "
+                     f"Failed: {diagnostics.get('failed', 0)} · Pruned: {diagnostics.get('pruned', 0)}")
+            st.write(f"Training time: {results['info'].get('training_time', 0):.1f} seconds")
+            if diagnostics.get("failed_trials"):
+                st.dataframe(pd.DataFrame(diagnostics["failed_trials"]), width='stretch')
+            for warning in diagnostics.get("warnings", [])[:10]:
+                st.warning(warning)
+
     # Log the display of training results
     st.session_state.logger.log_user_action(
         "Viewing Training Results",
@@ -78,6 +98,8 @@ def display_training_results(results):
 
 def main():
     st.title("Model Training")
+    if st.session_state.pop("training_cancelled_notice", False):
+        st.info("Training cancelled. Any previously completed run has been preserved.")
     
     # Add consistent navigation
     create_sidebar_navigation()
@@ -136,7 +158,7 @@ def main():
     
     # Use logger from session state
     st.session_state.logger.log_page_state("Data_Loading", {
-        "data_loaded": bool(st.session_state.get('data')),
+        "data_loaded": st.session_state.get('data') is not None,
         "target_selected": bool(st.session_state.get('target_column'))
     })
 
@@ -316,7 +338,7 @@ def main():
             **Recommendation for {model_type.upper()}**: Use Optuna for best results
 
             - **Random Search**: Traditional random sampling (limited early stopping support)
-            - **Optuna** ⭐: Advanced optimization with full early stopping support, 30-50% faster training
+            - **Optuna** ⭐: Adaptive parameter search with pruning between validation folds
             """
         else:
             help_text = """
@@ -349,6 +371,11 @@ def main():
                 value=50
             )
 
+        with st.expander("Training resources"):
+            workers = st.number_input("Maximum CPU workers", min_value=1, max_value=worker_budget(1024),
+                                      value=worker_budget(), step=1)
+            st.caption("Parallelism is limited to one level to avoid overloading the computer.")
+
         # Log training parameters
         st.session_state.logger.log_user_action(
             "Training Parameters Set",
@@ -379,48 +406,30 @@ def main():
                 progress_bar = st.progress(0)
                 status_text = st.empty()
 
+            def mark_cancelled():
+                st.session_state.training_cancelled_notice = True
+
+            st.button("Cancel training", key="cancel_training", on_click=mark_cancelled,
+                      help="Cancellation takes effect after the current configuration or final fit finishes.")
+            def update_progress(event):
+                # Streamlit processes a cancellation/rerun at this UI checkpoint,
+                # before the tuner can commit a new model.
+                done, total = event["completed"], max(1, event["total"])
+                progress_bar.progress(done / total,
+                                      text=f"Configurations processed: {done}/{total}")
+                phase = {"search": "Validating configurations", "refit": "Fitting selected models",
+                         "complete": "Training finished"}[event["phase"]]
+                status_text.info(f"{phase} · {event['elapsed_seconds']:.1f}s elapsed · "
+                                 f"{event['failed']} failed · {event['pruned']} pruned")
+
             with status_container:
                 if optimisation_method == "Random Search":
-                    status_text.info("🔄 Initializing Random Search hyperparameter tuning...")
-                    progress_bar.progress(10)
-
-                    status_text.info("🎯 Testing parameter combinations...")
-                    progress_bar.progress(30)
-
                     result = st.session_state.builder.auto_tune_hyperparameters(
-                        cv_folds=cv_folds,
-                        n_iter=n_iter
-                    )
-
-                    progress_bar.progress(90)
-                    
-                    if result["success"]:
-                        # Don't overwrite the model state - the auto_tune_hyperparameters method
-                        # already set up all the necessary model configurations including adjusted_model
-                        # Just ensure the optimization method and selection type are set
-                        st.session_state.builder.model.update({
-                            "optimisation_method": "random_search",
-                            "selection_type": "mean_score"
-                        })
-                        
-                        # Set session state for model selection
-                        st.session_state.selected_model_type = "mean_score"
-                        st.session_state.previous_model_selection = "mean_score"
-                        
-                else:  # Optuna
-                    status_text.info("🚀 Initializing Optuna hyperparameter optimization...")
-                    progress_bar.progress(10)
-
-                    status_text.info("🧠 Smart parameter exploration in progress...")
-                    progress_bar.progress(30)
-
+                        cv_folds=cv_folds, n_iter=n_iter, progress_callback=update_progress, workers=workers)
+                else:
                     result = st.session_state.builder.auto_tune_hyperparameters_optuna(
-                        cv_folds=cv_folds,
-                        n_trials=n_iter
-                    )
+                        cv_folds=cv_folds, n_trials=n_iter, progress_callback=update_progress, workers=workers)
 
-                    progress_bar.progress(90)
-                
                 if result["success"]:
                     status_text.success("✅ Training completed successfully!")
                     progress_bar.progress(100)
@@ -451,7 +460,7 @@ def main():
                         result["info"]["stability_analysis"]
                     )
                     
-                    if stability_level != "High stability":
+                    if stability_level not in {"High stability", "Stable"}:
                         st.session_state.logger.log_recommendation(
                             "Stability Improvement Needed",
                             {
@@ -464,6 +473,10 @@ def main():
                     st.session_state.builder.stage_completion[ModelStage.MODEL_TRAINING] = True
                     st.session_state.training_complete = True
                     st.session_state.training_results = result
+                    st.session_state.pop("selected_model_option", None)
+                    st.session_state.selected_model_type = "mean_score"
+                    st.session_state.previous_model_selection = "mean_score"
+                    st.session_state.selected_model_stability = result["info"]["stability_analysis"]
                     
                     # Store model signature after training completes
                     # This allows us to detect if user goes back and selects a different model
@@ -491,6 +504,9 @@ def main():
                     st.rerun()  # Rerun to show results in a clean state
                 else:
                     st.error(result["message"])
+                    if result.get("diagnostics"):
+                        with st.expander("Failure details", expanded=True):
+                            st.json(result["diagnostics"])
                     # Log training failure
                     st.session_state.logger.log_error(
                         "Model Training Failed",
@@ -519,135 +535,14 @@ def main():
             st.info("Training completed successfully! Review your results below.")
         with col2:
             if st.button("🗑️ Clear Results", type="secondary", help="Clear training results and start fresh"):
-                # Use session state manager for comprehensive cleanup
-                cleared_count = TrainingStateManager.clear_training_results()
-                optimization_stats = TrainingStateManager.optimize_session_state()
-
-                # Clear the training_complete flag
-                if 'training_complete' in st.session_state:
-                    del st.session_state.training_complete
-
-                # Clear model selection state variables
-                if 'selected_model_type' in st.session_state:
-                    del st.session_state.selected_model_type
-                if 'selected_model_stability' in st.session_state:
-                    del st.session_state.selected_model_stability
-                if 'previous_model_selection' in st.session_state:
-                    del st.session_state.previous_model_selection
-                if 'previous_training_id' in st.session_state:
-                    del st.session_state.previous_training_id
-                
-                # Clear model signature to allow retraining
-                if 'last_training_model_signature' in st.session_state:
-                    del st.session_state.last_training_model_signature
-                
-                # Reset the navigation pill to default (Training Results)
-                if 'active_training_pill' in st.session_state:
-                    del st.session_state.active_training_pill
-                
-                # Reset model to its default/pre-trained state
-                # Clear ONLY training-specific model attributes, preserve the base model structure
-                # We need to keep 'type', 'problem_type', and 'model' (the base unfitted model)
-                if st.session_state.builder.model:
-                    model_keys_to_reset = [
-                        'active_model',
-                        'best_model',
-                        'best_params',
-                        'best_score',
-                        'active_params',
-                        'cv_metrics',
-                        'cv_results',
-                        'cv_std',
-                        'stability_analysis',
-                        'optimisation_method',
-                        'selection_type',
-                        'adjusted_model',
-                        'adjusted_params',
-                        'adjusted_cv_metrics',
-                        'optimization_history',
-                        'optimisation_plots',
-                        'is_calibrated',
-                        'calibrated_model',
-                        'calibration_method',
-                        'calibration_cv_folds',
-                        'original_model',
-                        'threshold_optimized',
-                        'optimal_threshold',
-                        'threshold_is_binary',
-                        'threshold_criterion'
-                    ]
-                    
-                    # Only delete training-specific keys, NOT 'model', 'type', or 'problem_type'
-                    for key in model_keys_to_reset:
-                        if key in st.session_state.builder.model:
-                            del st.session_state.builder.model[key]
-                    
-                    # If the model has been fitted, we need to reset it to its original unfitted state
-                    # Get a fresh instance of the base model with default parameters
-                    if 'model' in st.session_state.builder.model and 'type' in st.session_state.builder.model:
-                        model_type = st.session_state.builder.model['type']
-                        problem_type = st.session_state.builder.model['problem_type']
-                        
-                        # Re-initialize the model with default parameters (matching Builder.select_model)
-                        from sklearn.linear_model import LogisticRegression, LinearRegression, Ridge
-                        from sklearn.naive_bayes import GaussianNB
-                        from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor
-                        from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-                        from sklearn.neural_network import MLPClassifier, MLPRegressor
-                        from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostingRegressor
-                        from xgboost import XGBClassifier, XGBRegressor
-                        from lightgbm import LGBMClassifier, LGBMRegressor
-                        from catboost import CatBoostClassifier, CatBoostRegressor
-                        
-                        model_configs = {
-                            "classification": {
-                                "logistic_regression": LogisticRegression(random_state=42, n_jobs=-1),
-                                "naive_bayes": GaussianNB(),
-                                "decision_tree": DecisionTreeClassifier(random_state=42),
-                                "random_forest": RandomForestClassifier(random_state=42, n_jobs=-1),
-                                "mlp": MLPClassifier(max_iter=1000, random_state=42),
-                                "hist_gradient_boosting": HistGradientBoostingClassifier(random_state=42),
-                                "catboost": CatBoostClassifier(random_state=42, verbose=False),
-                                "xgboost": XGBClassifier(random_state=42, use_label_encoder=False, eval_metric='logloss', nthread=-1),
-                                "lightgbm": LGBMClassifier(random_state=42, n_jobs=-1, verbose=-1)
-                            },
-                            "regression": {
-                                "linear_regression": LinearRegression(n_jobs=-1),
-                                "ridge_regression": Ridge(random_state=42),
-                                "decision_tree": DecisionTreeRegressor(random_state=42),
-                                "random_forest": RandomForestRegressor(random_state=42, n_jobs=-1),
-                                "mlp": MLPRegressor(max_iter=1000, random_state=42),
-                                "hist_gradient_boosting": HistGradientBoostingRegressor(random_state=42),
-                                "catboost": CatBoostRegressor(random_state=42, verbose=False),
-                                "xgboost": XGBRegressor(random_state=42, use_label_encoder=False, eval_metric='rmse', nthread=-1),
-                                "lightgbm": LGBMRegressor(random_state=42, n_jobs=-1, verbose=-1)
-                            }
-                        }
-                        
-                        config_key = "classification" if problem_type in ["binary_classification", "multiclass_classification", "classification"] else "regression"
-                        
-                        if model_type in model_configs[config_key]:
-                            st.session_state.builder.model['model'] = model_configs[config_key][model_type]
-                
-                # Reset model training completion status
-                st.session_state.builder.stage_completion[ModelStage.MODEL_TRAINING] = False
-                
-                # Reset calibration state using the state manager
-                TrainingStateManager.reset_calibration_state()
-                
-                # Log the clear action
-                st.session_state.logger.log_user_action(
-                    "Training Results Cleared",
-                    {"action": "clear_results", "reason": "user_requested"}
-                )
-                
-                st.success(f"""
-                    Training results cleared successfully!
-                    - Cleared {cleared_count} training variables
-                    - Freed {optimization_stats['memory_saved_mb']:.1f} MB of memory
-                    - Cache items cleaned: {optimization_stats['cache_cleanup']['removed_items']}
-                    - Model reset to default state
-                """)
+                from components.model_selection.utils.model_state import clear_model_results
+                builder = st.session_state.builder
+                model_type = builder.model["type"]
+                clear_model_results(builder)
+                reset_result = builder.select_model(model_type)
+                if not reset_result["success"]:
+                    st.error(reset_result["message"])
+                    return
                 st.rerun()
         
         st.divider()
@@ -754,30 +649,20 @@ def main():
                     "MODEL_TRAINING",
                     "MODEL_EVALUATION"
                 )
-                if 'cv_metrics' in st.session_state.builder.model:
-                    metrics = st.session_state.builder.model['cv_metrics']
-                    best_score = st.session_state.builder.model.get('best_score', metrics.get('mean_score', 0))
-
-                # Get stability level from training results
-                stability_level = "Unknown"
-                if hasattr(st.session_state, 'training_results') and st.session_state.training_results:
-                    stability_level = st.session_state.training_results.get("info", {}).get("stability_analysis", {}).get("level", "Unknown")
-
-
+                model = st.session_state.builder.model
+                metrics = model.get("active_cv_metrics", model.get("cv_metrics", {}))
+                run = model.get("training_run", {})
+                stability = st.session_state.get("selected_model_stability", {})
                 st.session_state.logger.log_journey_point(
-                        stage="MODEL_TRAINING",
-                        decision_type="MODEL_TRAINING",
-                        description="Model training completed",
-                        details={"Model Type": st.session_state.builder.model['type'],
-                                "Best Score": best_score,
-                                "Optimisation Method": optimisation_method,
-                                "Selection Type": st.session_state.builder.model['selection_type'],
-                                "CV Folds": cv_folds,
-                                "Parameter Configurations": n_iter,
-                                "Stability Level": stability_level
-                                },
-                        parent_id=None
-                    )
+                    stage="MODEL_TRAINING", decision_type="MODEL_TRAINING",
+                    description="Model training completed",
+                    details={
+                        "Model Type": model["type"], "Best Score": metrics.get("mean_score"),
+                        "Optimisation Method": run.get("optimisation_method", model.get("optimisation_method")),
+                        "Selection Type": model.get("selection_type"), "CV Folds": run.get("cv_folds"),
+                        "Parameter Configurations": run.get("requested_trials"),
+                        "Stability Level": stability.get("level", "Unknown"), "Run ID": run.get("run_id"),
+                    }, parent_id=None)
                 next_page = "7_Model_Evaluation"
                 st.switch_page(f"pages/{next_page}.py")
             

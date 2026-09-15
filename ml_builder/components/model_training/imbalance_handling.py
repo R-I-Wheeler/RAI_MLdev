@@ -323,9 +323,7 @@ def display_imbalance_handling_tools():
                 apply_resampling_method(selected_method)
         else:
             if st.button("✅ Keep Original Data", type="primary"):
-                st.session_state.imbalance_handled = True
-                st.session_state.imbalance_skipped = True
-                st.success("✅ Keeping original data - you can proceed with training.")
+                apply_resampling_method("None (Original Data)")
                 st.rerun()
 
 
@@ -346,6 +344,7 @@ def apply_resampling_method(method_name):
                 raise ValueError(result["message"])
         builder.model["resampling_method"] = method_name
         st.session_state.imbalance_handled = True
+        st.session_state.imbalance_skipped = method_name == "None (Original Data)"
         st.session_state.show_imbalance_tools = False
         st.session_state.logger.log_calculation(
             "Fold Resampling Configured",

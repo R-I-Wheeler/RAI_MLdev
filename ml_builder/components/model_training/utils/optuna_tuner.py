@@ -1,5 +1,9 @@
 import optuna
 from sklearn.model_selection import cross_val_score
+from sklearn.base import clone
+from threadpoolctl import threadpool_limits
+import time
+import warnings
 from sklearn.metrics import get_scorer
 import numpy as np
 from typing import Dict, Any, Callable
@@ -16,11 +20,11 @@ import plotly.graph_objects as go
 import pandas as pd
 from components.model_training.utils.parameter_ranges import AdaptiveParameterRanges
 from components.model_training.utils.validation_utils import (
-    selection_scoring, resampling_estimator, fitted_model,
+    selection_scoring, resampling_estimator, fitted_model, make_cv_splits, worker_budget,
 )
 
 class OptunaModelTuner:
-    def __init__(self, X_train, y_train, model_type: str, problem_type: str, cv_folds: int = 5, n_trials: int = 50, resampling_method=None):
+    def __init__(self, X_train, y_train, model_type: str, problem_type: str, cv_folds: int = 5, n_trials: int = 50, resampling_method=None, progress_callback=None, workers=None, base_model=None):
         self.X_train = X_train
         self.y_train = y_train
         self.model_type = model_type
@@ -28,6 +32,9 @@ class OptunaModelTuner:
         self.cv_folds = cv_folds
         self.n_trials = n_trials
         self.resampling_method = resampling_method
+        self.progress_callback = progress_callback
+        self.workers = worker_budget(workers)
+        self.base_model = base_model
         self.study = None
         self.best_model = None
         self.best_params = None
@@ -44,7 +51,7 @@ class OptunaModelTuner:
         
         # Calculate dataset characteristics for adaptive search space
         self.n_samples, self.n_features = self.X_train_values.shape
-        self.class_distribution = None if problem_type == "regression" else np.bincount(self.y_train_values)
+        self.class_distribution = None if problem_type == "regression" else pd.Series(self.y_train_values).value_counts().to_numpy()
         self.is_high_dimensional = self.n_features > 100
         self.is_small_dataset = self.n_samples < 1000
         self.feature_density = np.mean(np.abs(self.X_train_values) > 0)  # Measure of data sparsity
@@ -75,20 +82,24 @@ class OptunaModelTuner:
                     y_fold_val = self.y_train_values[val_idx]
                 
                 # A fresh estimator and sampler see only this fold's training rows.
-                model = resampling_estimator(self._create_model(params), self.resampling_method)
-                model.fit(X_fold_train, y_fold_train)
+                model = resampling_estimator(self._create_model(params), self.resampling_method, workers=self.workers)
+                with threadpool_limits(limits=self.workers):
+                    model.fit(X_fold_train, y_fold_train)
                 
                 fold_score = scorer(model, X_fold_val, y_fold_val)
-                scores.append(fold_score)
+                if not np.isfinite(fold_score):
+                    raise ValueError('A validation fold produced a non-finite score.')
+                scores.append(float(fold_score))
                 
                 # Report intermediate value for pruning
-                trial.report(fold_score, i)
+                trial.report(float(np.mean(scores)), i + 1)
                 
                 # Handle pruning based on intermediate results
                 if trial.should_prune():
                     raise optuna.TrialPruned()
             
-            return np.mean(scores)
+            trial.set_user_attr('fold_scores', scores)
+            return float(np.mean(scores))
         
         return objective
 
@@ -98,6 +109,8 @@ class OptunaModelTuner:
         params = {}
         
         for param_name, range_info in ranges.items():
+            if self.model_type == 'random_forest' and param_name == 'max_samples' and not params.get('bootstrap', True):
+                continue
             param_type = range_info[0]
             if param_type == "int":
                 _, low, high = range_info
@@ -119,7 +132,11 @@ class OptunaModelTuner:
     def _create_model(self, params: Dict[str, Any]) -> Any:
         """Create a model instance with given parameters."""
         # Use all params directly - no early stopping parameters to filter anymore
-        init_params = params
+        init_params = dict(params)
+        if self.model_type == 'random_forest' and not init_params.get('bootstrap', True):
+            init_params['max_samples'] = None
+        if self.base_model is not None:
+            return clone(self.base_model).set_params(**init_params)
 
         if self.model_type == "logistic_regression":
             return LogisticRegression(random_state=42, n_jobs=-1, **init_params)
@@ -182,154 +199,87 @@ class OptunaModelTuner:
             return {}
 
     def optimize(self) -> Dict[str, Any]:
-        """Run Optuna optimisation and return results."""
+        """Run trials sequentially with a bounded estimator worker budget."""
+        started = time.monotonic()
+        failures, run_warnings = [], []
         try:
-            # Configure pruning based on dataset characteristics
-            # Use HyperbandPruner which works better with TPESampler (our default)
-            n_startup_trials = max(10, self.n_trials // 5)  # Increased for better exploration
-
-            # HyperbandPruner for better performance with TPESampler
-            pruner = optuna.pruners.HyperbandPruner(
-                min_resource=1,  # Minimum number of CV folds before pruning
-                max_resource=self.cv_folds,  # Maximum CV folds
-                reduction_factor=3  # Aggressiveness of pruning
-            )
-            
-            # Select appropriate sampler based on model type and parameter space
-            if self.model_type in ["xgboost", "lightgbm", "hist_gradient_boosting", "catboost"]:
-                # For tree-based models, use TPE with multivariate=True for better parameter relationships
-                sampler = optuna.samplers.TPESampler(
-                    multivariate=True,
-                    n_startup_trials=n_startup_trials,
-                    seed=42,
-                    consider_endpoints=True
-                )
-            elif self.model_type in ["mlp"]:
-                # For neural networks, try to use CmaEs if available, otherwise fall back to TPE
-                try:
-                    import cmaes
-                    sampler = optuna.samplers.CmaEsSampler(
-                        seed=42,
-                        n_startup_trials=n_startup_trials
-                    )
-                except ImportError:
-                    # Fall back to TPE sampler if cmaes is not installed
-                    sampler = optuna.samplers.TPESampler(
-                        multivariate=True,
-                        n_startup_trials=n_startup_trials,
-                        seed=42,
-                        consider_endpoints=True
-                    )
-            else:
-                # For simpler models, use standard TPE
-                sampler = optuna.samplers.TPESampler(
-                    seed=42,
-                    n_startup_trials=n_startup_trials
-                )
-            
-            # Create study with in-memory storage
-            storage = optuna.storages.InMemoryStorage()
+            if self.n_trials < 1:
+                raise ValueError("At least one optimisation trial is required.")
+            self.cv_splits = make_cv_splits(
+                self.X_train, self.y_train, self.problem_type, self.cv_folds, self.resampling_method)
             study = optuna.create_study(
                 direction="maximize",
-                study_name=f"{self.model_type}_{self.problem_type}_optimisation",
-                pruner=pruner,
-                sampler=sampler,
-                storage=storage  # Use in-memory storage
+                sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=min(10, self.n_trials)),
+                pruner=optuna.pruners.MedianPruner(n_startup_trials=min(5, self.n_trials), n_warmup_steps=1),
             )
-            
-            # Create cross-validation splits once
-            from sklearn.model_selection import KFold, StratifiedKFold
-            # Handle both binary and multiclass classification
-            if self.problem_type in ["classification", "binary_classification", "multiclass_classification"]:
-                cv = StratifiedKFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
-            else:
-                cv = KFold(n_splits=self.cv_folds, shuffle=True, random_state=42)
-            
-            # Generate splits using numpy arrays
-            self.cv_splits = list(cv.split(self.X_train_values, self.y_train_values))
-            
-            # Get objective function once
-            objective_func = self._get_objective_func()
-            
-            # Run optimisation with catch trials
-            n_catch_trials = max(3, self.n_trials // 10)  # 10% of trials as catch trials
-            
-            for _ in range(n_catch_trials):
-                # Create catch trials with random sampling
-                catch_trial = study.ask()
-                catch_trial.set_user_attr("catch_trial", True)
-                try:
-                    result = objective_func(catch_trial)
-                    study.tell(catch_trial, result)
-                except Exception as e:
-                    # Handle exceptions during catch trials
-                    study.tell(catch_trial, state=optuna.trial.TrialState.FAIL)
-            
-            # Run main optimization
-            study.optimize(
-                objective_func,
-                n_trials=self.n_trials - n_catch_trials,
-                show_progress_bar=True,
-                n_jobs=-1,  # Enable parallel optimization for all dataset sizes for maximum performance
-                catch=(Exception,)  # Catch exceptions in individual trials without stopping the study
-            )
-            
-            # Store study for later use
             self.study = study
-            
-            # Get best parameters and create best model
-            self.best_params = study.best_params
-            self.best_model = self._create_model(self.best_params)
-            
-            # Fit the best model with original data format
-            final_estimator = resampling_estimator(self.best_model, self.resampling_method)
-            final_estimator.fit(self.X_train, self.y_train)
+            objective = self._get_objective_func()
+            def report(phase):
+                if self.progress_callback:
+                    self.progress_callback(dict(
+                        phase=phase, completed=len(study.trials), total=self.n_trials,
+                        failed=sum(t.state == optuna.trial.TrialState.FAIL for t in study.trials),
+                        pruned=sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials),
+                        elapsed_seconds=time.monotonic()-started))
+            report("search")
+            for _ in range(self.n_trials):
+                trial = study.ask()
+                try:
+                    with warnings.catch_warnings(record=True) as caught:
+                        warnings.simplefilter("always")
+                        try:
+                            value = objective(trial)
+                        finally:
+                            run_warnings.extend(str(w.message) for w in caught)
+                    study.tell(trial, value)
+                except optuna.TrialPruned:
+                    study.tell(trial, state=optuna.trial.TrialState.PRUNED)
+                except Exception as exc:
+                    trial.set_user_attr("failure_reason", str(exc))
+                    failures.append({"candidate": trial.number + 1, "params": trial.params, "reason": str(exc)})
+                    study.tell(trial, state=optuna.trial.TrialState.FAIL)
+                report("search")
+            complete = [t for t in study.trials if t.state == optuna.trial.TrialState.COMPLETE]
+            diagnostics = {
+                "completed": len(complete), "failed": len(failures),
+                "pruned": sum(t.state == optuna.trial.TrialState.PRUNED for t in study.trials),
+                "failed_trials": failures, "warnings": list(dict.fromkeys(run_warnings)),
+            }
+            if not complete:
+                return {"success": False, "message": "No optimisation trial completed all folds successfully.",
+                        "diagnostics": diagnostics}
+            self.best_params = dict(study.best_params)
+            if self.model_type == "random_forest" and not self.best_params.get("bootstrap", True):
+                self.best_params["max_samples"] = None
+            report("refit")
+            final_estimator = resampling_estimator(
+                self._create_model(self.best_params), self.resampling_method, workers=self.workers)
+            with threadpool_limits(limits=self.workers):
+                final_estimator.fit(self.X_train, self.y_train)
             self.best_model = fitted_model(final_estimator)
-            
-            # Get cross-validation results for the best model
-            scoring = selection_scoring(self.problem_type)
-            
-            self.cv_results = cross_val_score(
-                resampling_estimator(self.best_model, self.resampling_method), self.X_train, self.y_train,
-                cv=self.cv_splits, scoring=scoring, n_jobs=-1
-            )
-            
-            # Calculate additional optimisation metrics
-            optimisation_metrics = {
-                "n_complete_trials": len(study.trials),
-                "n_pruned_trials": len([t for t in study.trials if t.state == optuna.trial.TrialState.PRUNED]),
-                "study_duration": study.trials[-1].datetime_complete - study.trials[0].datetime_start
-            }
-            
-            # Prepare optimisation history data
+            # Reuse the winning trial's scores instead of fitting every fold again.
+            self.cv_results = np.asarray(study.best_trial.user_attrs["fold_scores"], dtype=float)
+            duration = max(t.datetime_complete for t in study.trials) - min(t.datetime_start for t in study.trials)
+            # Only fully evaluated trials are comparable in performance/parameter plots.
             history = {
-                "values": study.trials_dataframe()["value"].tolist(),
-                "params": [t.params for t in study.trials],
-                "metrics": optimisation_metrics,
+                "values": [t.value for t in complete], "params": [t.params for t in complete],
+                "trial_numbers": [t.number for t in complete],
                 "trials": [{"state": t.state.name} for t in study.trials],
-                "study_duration": study.trials[-1].datetime_complete - study.trials[0].datetime_start
+                "study_duration": duration,
+                "metrics": {"n_complete_trials": len(complete), "n_pruned_trials": diagnostics["pruned"],
+                            "n_failed_trials": len(failures), "study_duration": duration},
             }
-            
+            report("complete")
             return {
-                "success": True,
-                "message": "Optimisation completed successfully",
-                "best_params": self.best_params,
-                "best_score": float(study.best_value),
-                "cv_mean": float(self.cv_results.mean()),
-                "cv_std": float(self.cv_results.std()),
-                "cv_results": self.cv_results,
-                "optimisation_history": history,
-                "model": self.best_model
+                "success": True, "message": "Optimisation completed successfully",
+                "best_params": self.best_params, "best_score": float(study.best_value),
+                "cv_mean": float(self.cv_results.mean()), "cv_std": float(self.cv_results.std()),
+                "cv_results": self.cv_results, "optimisation_history": history, "model": self.best_model,
+                "diagnostics": diagnostics, "training_time": time.monotonic()-started,
             }
-            
-        except Exception as e:
-            import traceback
-            error_details = traceback.format_exc()
-            return {
-                "success": False,
-                "message": f"Error during optimisation: {str(e)}",
-                "error_details": error_details
-            }
+        except Exception as exc:
+            return {"success": False, "message": f"Error during optimisation: {exc}",
+                    "diagnostics": {"failed_trials": failures, "warnings": list(dict.fromkeys(run_warnings))}}
 
     def get_optimisation_plots(self) -> Dict[str, Any]:
         """Get optimisation visualization plots."""
@@ -343,18 +293,19 @@ class OptunaModelTuner:
 
             # Get optimisation history
             df = self.study.trials_dataframe()
+            df = df.loc[df['state'] == 'COMPLETE'].reset_index(drop=True)
             print(f"Debug: Number of trials in dataframe: {len(df)}")
             
             # Create history plot
             history_fig = go.Figure()
             
             # Find best trial
-            best_trial_idx = df['value'].argmax()
+            best_trial_idx = int(df.loc[df['value'].idxmax(), 'number'])
             best_value = df['value'].max()
             
             # Add optimisation history line with highlighted best point
             history_fig.add_trace(go.Scatter(
-                x=list(range(len(df))),
+                x=df['number'],
                 y=df['value'],
                 mode='markers+lines',
                 name='Trial Score',
@@ -372,7 +323,7 @@ class OptunaModelTuner:
             # Add best value line
             best_values = [max(df['value'][:i+1]) for i in range(len(df))]
             history_fig.add_trace(go.Scatter(
-                x=list(range(len(df))),
+                x=df['number'],
                 y=best_values,
                 mode='lines',
                 name='Best Score',
@@ -535,10 +486,13 @@ class OptunaModelTuner:
                 param_fig = None
 
             timeline_fig = optuna.visualization.plot_timeline(self.study)
-            param_importances_fig = optuna.visualization.plot_param_importances(self.study)
+            try:
+                param_importances_fig = optuna.visualization.plot_param_importances(self.study)
+            except (ValueError, RuntimeError):
+                param_importances_fig = None
             # Prepare optimisation history data
             history_data = {
-                'params': [t.params for t in self.study.trials],
+                'params': [t.params for t in self.study.trials if t.state == optuna.trial.TrialState.COMPLETE],
                 'values': df['value'].tolist()
             }
 

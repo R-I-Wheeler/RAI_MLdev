@@ -50,7 +50,7 @@ class AdaptiveParameterRanges:
         self.is_small_dataset = cached_chars['is_small_dataset']
 
         # Calculate class distribution and feature density (these are less expensive)
-        self.class_distribution = None if problem_type == "regression" else np.bincount(self.y_train_values)
+        self.class_distribution = None if problem_type == "regression" else pd.Series(self.y_train_values).value_counts().to_numpy()
         self.feature_density = np.mean(np.abs(self.X_train_values) > 0)
         
     def get_ranges(self, model_type: str, tuning_method: str = "optuna") -> Dict[str, Any]:
@@ -60,7 +60,11 @@ class AdaptiveParameterRanges:
         if tuning_method == "optuna":
             return ranges
         else:
-            return self._convert_to_random_search(ranges)
+            converted = self._convert_to_random_search(ranges)
+            if model_type == 'random_forest':
+                return [dict(converted, bootstrap=[True]),
+                        dict(converted, bootstrap=[False], max_samples=[None])]
+            return converted
     
     def _get_base_ranges(self, model_type: str) -> Dict[str, Any]:
         """Get base parameter ranges in Optuna format."""
@@ -244,4 +248,4 @@ class AdaptiveParameterRanges:
                 _, categories = range_info
                 random_search_ranges[param] = categories
         
-        return random_search_ranges 
+        return random_search_ranges
