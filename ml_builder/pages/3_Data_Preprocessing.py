@@ -21,15 +21,6 @@ from components.data_preprocessing.categorical_encoding import CategoricalEncodi
 from components.data_preprocessing.data_types_optimization import DataTypesOptimisationComponent
 from components.data_preprocessing.final_data_review import FinalDataReviewComponent
 
-def scroll():
-    
-    st.session_state.scroll_to_top = True
-    
-    st.rerun()
-
-def fc_scroll():
-    st.session_state.scroll_to_top = True
-
 def main():
     
     if 'scroll_to_top' not in st.session_state:
@@ -284,24 +275,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -311,7 +284,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 "Feature Management",
@@ -339,24 +312,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -366,7 +321,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -395,24 +350,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -422,7 +359,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -452,24 +389,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -481,7 +400,7 @@ def main():
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
                         if st.session_state.missing_values_complete:
-                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                                 # Log stage transition
                                 st.session_state.logger.log_stage_transition(
                                     step_sequence[current_step]['label'],
@@ -491,7 +410,7 @@ def main():
                                 st.session_state.scroll_to_top = True
                                 st.rerun()
                         else:
-                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply missing values before continuing", width='stretch')
+                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply missing values before continuing", width='stretch', type='primary')
         
         elif st.session_state.preprocessing_step == 'binning':
             # Log page state when entering binning analysis
@@ -514,24 +433,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -541,7 +442,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -571,24 +472,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -598,7 +481,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -639,29 +522,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(3) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -688,7 +548,7 @@ def main():
                     if step_info['next']:
                         # Only enable the continue button if missing values is complete
                         if can_proceed:
-                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                            if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                                 # Log stage transition
                                 st.session_state.logger.log_stage_transition(
                                     step_sequence[current_step]['label'],
@@ -699,7 +559,7 @@ def main():
                                 st.session_state.scroll_to_top = True
                                 st.rerun()
                         else:
-                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply categorical encoding before continuing", width='stretch')
+                            st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", disabled=True, help="Please apply categorical encoding before continuing", width='stretch', type='primary')
 
         elif st.session_state.preprocessing_step == 'feature_creation':
             # Log page state when entering feature creation
@@ -735,24 +595,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
 
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -764,7 +606,7 @@ def main():
                 with nav_button_cols[1]:
                     if step_info['next']:
                         if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →",
-                                     width='stretch', on_click=fc_scroll):
+                                     width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -795,24 +637,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     # Determine back target based on skip flag
@@ -829,7 +653,7 @@ def main():
                 
                 with nav_button_cols[1]:
                     if step_info['next']:
-                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', on_click=scroll):
+                        if st.button(f"Continue to {step_sequence[step_info['next']]['label']} →", width='stretch', type='primary'):
                             # Log stage transition
                             st.session_state.logger.log_stage_transition(
                                 step_sequence[current_step]['label'],
@@ -859,24 +683,6 @@ def main():
             nav_cols = st.columns([1, 2, 1])
             
             with nav_cols[1]:
-                st.markdown(
-                    """
-                    <style>
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(1) button {
-                        width: 100%;
-                        background-color: #f0f2f6;
-                        border: 1px solid #e0e0e0;
-                    }
-                    div[data-testid="stHorizontalBlock"] > div:nth-child(2) button {
-                        width: 100%;
-                        background-color: #FF4B4B;
-                        color: white;
-                    }
-                    </style>
-                    """,
-                    unsafe_allow_html=True
-                )
-                
                 nav_button_cols = st.columns([1, 1])
                 with nav_button_cols[0]:
                     if step_info['prev']:
@@ -958,5 +764,4 @@ def main():
     )
 
 if __name__ == "__main__":
-    main() 
-
+    main()

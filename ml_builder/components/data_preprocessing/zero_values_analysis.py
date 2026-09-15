@@ -34,7 +34,7 @@ class ZeroValuesAnalysis:
                 data_explorer = DataExplorationComponent(self.builder, st.session_state.logger, data=st.session_state.builder.data, target_column=st.session_state.builder.target_column)
                 data_explorer.render()
 
-            if st.button("Original Data Exploration",on_click=st.rerun):
+            if st.button("Original Data Exploration"):
                 data_explorer_dialog()
         with col2:
             st.write("")
@@ -360,4 +360,4 @@ class ZeroValuesAnalysis:
                 directly_modified_columns
             )
         else:
-            st.warning("Visualization function not available. Skipping change visualization.") 
+            st.warning("Visualization function not available. Skipping change visualization.")

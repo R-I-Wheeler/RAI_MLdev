@@ -56,7 +56,7 @@ class FeatureManagementComponent:
             def data_explorer_dialog():
                 data_explorer = DataExplorationComponent(self.builder, st.session_state.logger, data=st.session_state.builder.data, target_column=st.session_state.builder.target_column)
                 data_explorer.render()
-            if st.button("Original Data Exploration",on_click=st.rerun):
+            if st.button("Original Data Exploration"):
                 data_explorer_dialog()
         with col2:
             st.write("")
@@ -172,11 +172,14 @@ class FeatureManagementComponent:
                      """)
             
         st.write("**Convert Column Types**")
+        column_options = [col for col in self.data.columns
+                          if col != self.target_column]
+        if not column_options:
+            st.info("No feature columns are available for data type conversion.")
+            return
+
         col1, col2 = st.columns(2)
         with col1:
-            # Filter out the target column from the options
-            column_options = [col for col in self.data.columns 
-                             if col != self.target_column]
             col_to_convert = st.selectbox(
                 "Select column to convert",
                 column_options,
@@ -583,4 +586,4 @@ class FeatureManagementComponent:
             # Add a button to clear the analysis
             if st.button("Clear Removal Analysis"):
                 st.session_state.show_removal_analysis = None
-                st.rerun() 
+                st.rerun()
