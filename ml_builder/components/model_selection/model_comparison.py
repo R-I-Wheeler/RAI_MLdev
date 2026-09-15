@@ -18,6 +18,8 @@ from sklearn.ensemble import HistGradientBoostingClassifier, HistGradientBoostin
 from xgboost import XGBClassifier, XGBRegressor
 from lightgbm import LGBMClassifier, LGBMRegressor
 from catboost import CatBoostClassifier, CatBoostRegressor
+from sklearn.model_selection import train_test_split
+from components.model_training.utils.validation_utils import classification_average
 
 
 def quick_model_comparison(training_data, testing_data, target_column, problem_type, sample_size=1000, exclude_xgboost=False):
@@ -26,7 +28,7 @@ def quick_model_comparison(training_data, testing_data, target_column, problem_t
 
     Args:
         training_data: DataFrame containing the training dataset
-        testing_data: DataFrame containing the testing dataset
+        testing_data: Retained for caller compatibility; never used for selection
         target_column: Name of the target column
         problem_type: Either "classification" or "regression"
         sample_size: Size of the sample to use
@@ -35,15 +37,15 @@ def quick_model_comparison(training_data, testing_data, target_column, problem_t
     Returns:
         DataFrame containing model performance metrics
     """
-    # Sample the data if it's larger than sample_size
+    # Validation is drawn only from training data. The final test set stays unseen.
     if len(training_data) > sample_size:
-        train_sample = training_data.sample(n=sample_size, random_state=42)
-        # Calculate the proportional size for test sample
-        test_sample_size = int(sample_size * len(testing_data) / len(training_data))
-        test_sample = testing_data.sample(n=test_sample_size, random_state=42)
+        sample = training_data.sample(n=sample_size, random_state=42)
     else:
-        train_sample = training_data.copy()
-        test_sample = testing_data.copy()
+        sample = training_data.copy()
+    train_sample, test_sample = train_test_split(
+        sample, test_size=0.2, random_state=42,
+        stratify=sample[target_column] if problem_type != "regression" else None,
+    )
 
     # Split features and target
     X_train = train_sample.drop(columns=[target_column])
@@ -104,13 +106,7 @@ def quick_model_comparison(training_data, testing_data, target_column, problem_t
             # Calculate metrics
             # Handle both binary and multiclass classification
             if problem_type in ["classification", "binary_classification", "multiclass_classification"]:
-                # Use appropriate averaging for multiclass
-                # For binary classification, we can use 'binary' or 'weighted' (both work the same)
-                # For multiclass classification, we need 'weighted' or 'macro'
-                if problem_type == "multiclass_classification":
-                    avg_method = 'weighted'  # Use weighted average for multiclass
-                else:
-                    avg_method = 'binary'  # Use binary for binary classification
+                avg_method = classification_average(problem_type)
 
                 metrics = {
                     "Model": name,

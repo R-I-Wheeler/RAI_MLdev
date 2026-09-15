@@ -600,6 +600,8 @@ CALCULATION_EXPLANATIONS = {
             - Compares all available models using a small sample of your data with default parameters
             - Provides rough performance estimates to guide model selection
             - Uses maximum 1000 rows for fast computation
+            - Reserves 20% of that training-data sample for validation; the final test set is not used
+            - Ranks binary classification by F1, multiclass classification by macro F1, and regression by R²
             - All models use default hyperparameters (not optimized)
         """,
         "interpretation": """

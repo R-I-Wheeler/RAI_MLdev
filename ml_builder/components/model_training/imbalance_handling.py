@@ -330,119 +330,32 @@ def display_imbalance_handling_tools():
 
 
 def apply_resampling_method(method_name):
-    """Apply the selected resampling method to the training data."""
+    """Configure resampling inside CV folds without modifying the source data."""
+    from components.model_training.utils.validation_utils import resampling_estimator
+    from components.model_selection.utils.model_state import clear_model_results
 
+    builder = st.session_state.builder
     try:
-        with st.spinner(f"Applying {method_name}..."):
-            # Get original data distribution
-            original_dist = pd.Series(st.session_state.builder.y_train).value_counts()
-
-            # Apply resampling based on selected method
-            if method_name == "Random Oversampling":
-                from imblearn.over_sampling import RandomOverSampler
-                resampler = RandomOverSampler(random_state=42)
-            elif method_name == "Random Undersampling":
-                from imblearn.under_sampling import RandomUnderSampler
-                resampler = RandomUnderSampler(random_state=42)
-            elif method_name == "SMOTE":
-                from imblearn.over_sampling import SMOTE
-                resampler = SMOTE(random_state=42)
-            elif method_name == "ADASYN":
-                from imblearn.over_sampling import ADASYN
-                resampler = ADASYN(random_state=42)
-            else:
-                st.error("Unknown resampling method")
-                return
-
-            # Resample the data
-            X_resampled, y_resampled = resampler.fit_resample(
-                st.session_state.builder.X_train,
-                st.session_state.builder.y_train
-            )
-
-            # Update the builder with resampled data
-            st.session_state.builder.X_train = X_resampled
-            st.session_state.builder.y_train = y_resampled
-
-            # Get new distribution
-            new_dist = pd.Series(y_resampled).value_counts()
-
-            # Log the resampling
-            if hasattr(st.session_state, 'logger'):
-                st.session_state.logger.log_calculation(
-                    "Pre-Training Resampling Applied",
-                    {
-                        "method": method_name,
-                        "original_samples": len(original_dist),
-                        "resampled_samples": len(y_resampled),
-                        "original_distribution": original_dist.to_dict(),
-                        "new_distribution": new_dist.to_dict()
-                    }
-                )
-
-                st.session_state.logger.log_journey_point(
-                    stage="MODEL_TRAINING",
-                    decision_type="RESAMPLING",
-                    description="Pre-training resampling applied",
-                    details={
-                        "Method": method_name,
-                        "Original Samples": len(original_dist),
-                        "Resampled Samples": len(y_resampled),
-                        "Timing": "Before Training"
-                    },
-                    parent_id=None
-                )
-
-            # Show comparison
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                name='Original',
-                x=original_dist.index.astype(str),
-                y=original_dist.values,
-                text=original_dist.values,
-                textposition='auto',
-            ))
-            fig.add_trace(go.Bar(
-                name='After Resampling',
-                x=new_dist.index.astype(str),
-                y=new_dist.values,
-                text=new_dist.values,
-                textposition='auto',
-            ))
-            fig.update_layout(
-                title='Class Distribution: Before vs After Resampling',
-                xaxis_title='Class',
-                yaxis_title='Count',
-                barmode='group',
-                height=400
-            )
-
-            st.plotly_chart(fig, config={'responsive': True})
-
-            st.success(f"""
-            ✅ **{method_name} Applied Successfully!**
-
-            - Original samples: {len(original_dist):,}
-            - After resampling: {len(y_resampled):,}
-            - Classes are now balanced
-
-            You can proceed with model training on the balanced dataset.
-            """)
-
-            # Update session state
-            st.session_state.imbalance_handled = True
-            st.session_state.show_imbalance_tools = False
-
-    except Exception as e:
-        st.error(f"Error applying resampling: {str(e)}")
-        if hasattr(st.session_state, 'logger'):
-            st.session_state.logger.log_error(
-                "Pre-Training Resampling Failed",
-                {
-                    "method": method_name,
-                    "error": str(e)
-                }
-            )
+        # Validate before invalidating any completed results.
+        resampling_estimator(builder.model["model"], method_name)
+        model_type = builder.model["type"]
+        if builder.model.get("resampling_method") != method_name:
+            clear_model_results(builder)
+            result = builder.select_model(model_type)
+            if not result["success"]:
+                raise ValueError(result["message"])
+        builder.model["resampling_method"] = method_name
+        st.session_state.imbalance_handled = True
+        st.session_state.show_imbalance_tools = False
+        st.session_state.logger.log_calculation(
+            "Fold Resampling Configured",
+            {"method": method_name, "original_samples": len(builder.y_train),
+             "timing": "Within each cross-validation training fold and final fit"},
+        )
+        st.success(f"{method_name} configured. Training will resample each training fold; source data is preserved.")
+    except Exception as exc:
+        st.error(f"Error configuring resampling: {exc}")
+        st.session_state.logger.log_error("Fold Resampling Configuration Failed", {"error": str(exc)})
 
 
 def display_imbalance_handling():
@@ -644,101 +557,8 @@ def display_imbalance_handling():
                                 {"method": resampling_method}
                             )
 
-                            with st.spinner("Applying resampling technique..."):
-                                # Get original data distribution
-                                original_dist = pd.Series(st.session_state.builder.y_train).value_counts()
-
-                                # Apply resampling
-                                try:
-                                    if resampling_method == "Random Oversampling":
-                                        from imblearn.over_sampling import RandomOverSampler
-                                        resampler = RandomOverSampler(random_state=42)
-                                    elif resampling_method == "Random Undersampling":
-                                        from imblearn.under_sampling import RandomUnderSampler
-                                        resampler = RandomUnderSampler(random_state=42)
-                                    elif resampling_method == "SMOTE":
-                                        from imblearn.over_sampling import SMOTE
-                                        resampler = SMOTE(random_state=42)
-                                    else:  # ADASYN
-                                        from imblearn.over_sampling import ADASYN
-                                        resampler = ADASYN(random_state=42)
-
-                                    # Resample the data
-                                    X_resampled, y_resampled = resampler.fit_resample(
-                                        st.session_state.builder.X_train,
-                                        st.session_state.builder.y_train
-                                    )
-
-                                    # Update the builder with resampled data
-                                    st.session_state.builder.X_train = X_resampled
-                                    st.session_state.builder.y_train = y_resampled
-
-                                    # Get new distribution
-                                    new_dist = pd.Series(y_resampled).value_counts()
-
-                                    # Log resampling results
-                                    st.session_state.logger.log_calculation(
-                                        "Resampling Results",
-                                        {
-                                            "method": resampling_method,
-                                            "original_samples": len(st.session_state.builder.y_train),
-                                            "resampled_samples": len(y_resampled),
-                                            "original_distribution": original_dist.to_dict(),
-                                            "new_distribution": new_dist.to_dict()
-                                        }
-                                    )
-                                    st.session_state.logger.log_journey_point(
-                                        stage="MODEL_TRAINING",
-                                        decision_type="RESAMPLING",
-                                        description="Resampling applied",
-                                        details={"Method": resampling_method,
-                                                "Original Samples": len(st.session_state.builder.y_train),
-                                                "Resampled Samples": len(y_resampled),
-                                                "Original Distribution": original_dist.to_dict()},
-                                        parent_id=None
-                                    )
-                                    # Create comparison plot
-                                    fig = go.Figure()
-                                    fig.add_trace(go.Bar(
-                                        name='Original',
-                                        x=original_dist.index.astype(str),
-                                        y=original_dist.values,
-                                        text=original_dist.values,
-                                        textposition='auto',
-                                    ))
-                                    fig.add_trace(go.Bar(
-                                        name='After Resampling',
-                                        x=new_dist.index.astype(str),
-                                        y=new_dist.values,
-                                        text=new_dist.values,
-                                        textposition='auto',
-                                    ))
-                                    fig.update_layout(
-                                        title='Class Distribution Comparison',
-                                        xaxis_title='Class',
-                                        yaxis_title='Count',
-                                        barmode='group'
-                                    )
-
-                                    st.plotly_chart(fig)
-
-                                    st.success(f"""
-                                        Successfully applied {resampling_method}!
-                                        - Original samples: {len(st.session_state.builder.y_train)}
-                                        - After resampling: {len(y_resampled)}
-                                    """)
-
-                                except Exception as e:
-                                    error_msg = str(e)
-                                    st.error(f"Error applying resampling: {error_msg}")
-                                    st.session_state.logger.log_error(
-                                        "Resampling Failed",
-                                        {
-                                            "method": resampling_method,
-                                            "error": error_msg,
-                                            "original_samples": len(st.session_state.builder.y_train)
-                                        }
-                                    )
+                            apply_resampling_method(resampling_method)
+                            st.rerun()
                 else:
                     st.success("""
                         Your dataset shows good class balance. No resampling is necessary.

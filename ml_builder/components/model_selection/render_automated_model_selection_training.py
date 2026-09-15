@@ -39,30 +39,8 @@ def render_automated_model_selection_training():
             st.info("✨ Automated model selection and training has been completed. Ready for model evaluation!")
         with col2:
             if st.button("🗑️ Clear Results", type="secondary", help="Clear automation results and start fresh"):
-                # Clear automation state
-                if 'automated_model_selection_training_completed' in st.session_state:
-                    del st.session_state.automated_model_selection_training_completed
-                if 'automated_model_selection_training_result' in st.session_state:
-                    del st.session_state.automated_model_selection_training_result
-
-                # Reset model selection and training stages
-                st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = False
-                st.session_state.builder.stage_completion[ModelStage.MODEL_TRAINING] = False
-
-                # Clear training state
-                if 'training_complete' in st.session_state:
-                    del st.session_state.training_complete
-                if 'training_results' in st.session_state:
-                    del st.session_state.training_results
-                if 'selected_model_type' in st.session_state:
-                    del st.session_state.selected_model_type
-                if 'selected_model_stability' in st.session_state:
-                    del st.session_state.selected_model_stability
-                if 'previous_model_selection' in st.session_state:
-                    del st.session_state.previous_model_selection
-
-                # Clear builder model state
-                st.session_state.builder.model = None
+                from components.model_selection.utils.model_state import clear_model_results
+                clear_model_results(st.session_state.builder)
 
                 # Log the clear action
                 st.session_state.logger.log_user_action(
@@ -588,9 +566,8 @@ def render_automation_dashboard(result):
             imbalance_details = details.get('imbalance_details', {})
             st.write(f"- **Method Applied:** {details.get('imbalance_method', 'N/A')}")
             st.write(f"- **Original Samples:** {imbalance_details.get('original_samples', 'N/A')}")
-            st.write(f"- **Resampled Samples:** {imbalance_details.get('new_samples', 'N/A')}")
+            st.write("- **Resampling:** Applied within each training fold and the final fit")
             st.write(f"- **Imbalance Ratio Before:** {imbalance_details.get('imbalance_ratio_before', 0):.2f}:1")
-            st.write(f"- **Imbalance Ratio After:** {imbalance_details.get('imbalance_ratio_after', 0):.2f}:1")
         else:
             st.info("No imbalance handling applied")
 
@@ -911,9 +888,9 @@ def _generate_automation_report(result, builder) -> str:
         imbalance_details = details.get('imbalance_details', {})
         report += f"- Method Applied: {details.get('imbalance_method', 'N/A')}\n"
         report += f"- Original Samples: {imbalance_details.get('original_samples', 'N/A')}\n"
-        report += f"- Resampled Samples: {imbalance_details.get('new_samples', 'N/A')}\n"
+        report += "- Resampling: Applied within each training fold and the final fit\n"
         report += f"- Imbalance Ratio Before: {imbalance_details.get('imbalance_ratio_before', 0):.2f}:1\n"
-        report += f"- Imbalance Ratio After: {imbalance_details.get('imbalance_ratio_after', 0):.2f}:1\n\n"
+        report += "\n"
     else:
         report += "- No imbalance handling applied\n\n"
 

@@ -85,7 +85,7 @@ def extract_model_predictions(model_dict: Dict[str, Any], X_test: pd.DataFrame) 
     return y_pred, y_prob_matrix
 
 
-def calculate_classification_metrics(y_test: Union[pd.Series, np.ndarray], y_pred: np.ndarray) -> Dict[str, float]:
+def calculate_classification_metrics(y_test: Union[pd.Series, np.ndarray], y_pred: np.ndarray, problem_type=None) -> Dict[str, float]:
     """
     Calculate classification metrics.
 
@@ -96,11 +96,15 @@ def calculate_classification_metrics(y_test: Union[pd.Series, np.ndarray], y_pre
     Returns:
         Dictionary of classification metrics
     """
+    from components.model_training.utils.validation_utils import classification_average
+    if problem_type is None:
+        problem_type = "multiclass_classification" if len(np.unique(y_test)) > 2 else "binary_classification"
+    average = classification_average(problem_type)
     metrics = {
         "accuracy": float(accuracy_score(y_test, y_pred)),
-        "precision": float(precision_score(y_test, y_pred, average='weighted')),
-        "recall": float(recall_score(y_test, y_pred, average='weighted')),
-        "f1": float(f1_score(y_test, y_pred, average='weighted'))
+        "precision": float(precision_score(y_test, y_pred, average=average, zero_division=0)),
+        "recall": float(recall_score(y_test, y_pred, average=average, zero_division=0)),
+        "f1": float(f1_score(y_test, y_pred, average=average, zero_division=0))
     }
     return metrics
 

@@ -5,6 +5,7 @@ from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from sklearn.metrics import brier_score_loss
 import plotly.graph_objects as go
 from typing import Dict, Any, Tuple
+from components.model_training.utils.validation_utils import training_validation_predictions, resampling_estimator
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -216,12 +217,10 @@ def analyze_current_calibration() -> Dict[str, Any]:
         model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
         X_train = st.session_state.builder.X_train
         y_train = st.session_state.builder.y_train
-        X_test = st.session_state.builder.X_test
-        y_test = st.session_state.builder.y_test
         problem_type = st.session_state.builder.model["problem_type"]
         
-        # Get predictions on test data for calibration analysis
-        y_prob_test = model.predict_proba(X_test)
+        # Calibration decisions use held-out predictions within training data.
+        y_test, _, y_prob_test = training_validation_predictions(st.session_state.builder)
         
         # Handle binary vs multiclass
         is_binary = problem_type in ["classification", "binary_classification"]
@@ -893,6 +892,8 @@ def apply_calibration(method: str, cv_folds: int):
             X_train = st.session_state.builder.X_train
             y_train = st.session_state.builder.y_train
             
+            # Resample only estimator-training folds, preserving calibration folds.
+            model = resampling_estimator(model, st.session_state.builder.model.get("resampling_method"))
             # Create calibrated classifier
             # Handle both old and new scikit-learn API versions
             try:

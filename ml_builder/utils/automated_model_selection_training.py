@@ -23,6 +23,9 @@ from typing import Dict, Any, Optional, Tuple
 from copy import deepcopy
 
 from content.stage_info import ModelStage
+from components.model_training.utils.validation_utils import (
+    resampling_estimator, validation_probabilities,
+)
 
 
 class AutomatedModelSelectionTraining:
@@ -454,13 +457,15 @@ class AutomatedModelSelectionTraining:
 
         - Uses detect_classification_imbalance() from imbalance_handling.py
         - Gets recommendation from Builder (delegates to imbalance_utils.py)
-        - Applies recommended strategy using apply_resampling_method()
+        - Configures the recommended strategy for cross-validation training folds
         - Skips for regression problems
         """
+        # A new automated run configures its own fold-local strategy.
+        self.builder.model.pop('resampling_method', None)
         # Skip for regression problems
-        if self.selection_summary['problem_type'] == 'regression':
+        if self.selection_summary['problem_type'] == 'regression' or not self.auto_handle_imbalance:
             if self.show_analysis:
-                st.info("ℹ️ Class imbalance handling not applicable for regression.")
+                st.info("ℹ️ Automatic class imbalance handling is disabled or not applicable.")
             self.selection_summary['imbalance_handled'] = False
             return
 
@@ -470,7 +475,6 @@ class AutomatedModelSelectionTraining:
         # Import from existing component
         from components.model_training.imbalance_handling import (
             detect_classification_imbalance,
-            apply_resampling_method
         )
 
         # Detect class imbalance using existing function
@@ -521,54 +525,23 @@ class AutomatedModelSelectionTraining:
             st.session_state.imbalance_skipped = True
             return
 
-        # Store original distribution for logging
+        # Record a strategy; the tuner applies it inside each training fold.
+        # Keep the canonical training data and validation class distribution intact.
+        self.builder.model['resampling_method'] = recommended_method
+        self.selection_summary['imbalance_handled'] = True
+        self.selection_summary['imbalance_method'] = recommended_method
         original_dist = pd.Series(self.builder.y_train).value_counts()
-
-        # Apply the recommended resampling method using existing function
-        try:
-            # The apply_resampling_method function modifies builder data directly
-            apply_resampling_method(recommended_method)
-
-            # Get new distribution after resampling
-            new_dist = pd.Series(self.builder.y_train).value_counts()
-
-            # Store imbalance handling details
-            self.selection_summary['imbalance_handled'] = True
-            self.selection_summary['imbalance_method'] = recommended_method
-            self.selection_summary['imbalance_details'] = {
-                'original_distribution': original_dist.to_dict(),
-                'new_distribution': new_dist.to_dict(),
-                'original_samples': int(len(original_dist)),
-                'new_samples': int(self.builder.y_train.shape[0]),
-                'imbalance_ratio_before': float(imbalance_analysis['metrics']['imbalance_ratio']),
-                'imbalance_ratio_after': float(new_dist.max() / new_dist.min())
-            }
-
-            # Update session state flags
-            st.session_state.imbalance_handled = True
-            st.session_state.imbalance_skipped = False
-
-            # Log automation-specific details
-            self.logger.log_calculation(
-                "Automated Imbalance Handling Applied",
-                self.selection_summary['imbalance_details']
-            )
-
-            if self.show_analysis:
-                st.success(f"✅ Applied {recommended_method} successfully")
-                st.write(f"- **Original samples:** {self.selection_summary['imbalance_details']['original_samples']}")
-                st.write(f"- **Resampled samples:** {self.selection_summary['imbalance_details']['new_samples']}")
-                st.write(f"- **Imbalance ratio before:** {self.selection_summary['imbalance_details']['imbalance_ratio_before']:.2f}:1")
-                st.write(f"- **Imbalance ratio after:** {self.selection_summary['imbalance_details']['imbalance_ratio_after']:.2f}:1")
-
-        except Exception as e:
-            self.logger.log_error(
-                "Automated Imbalance Handling Failed",
-                {"method": recommended_method, "error": str(e)}
-            )
-            if self.show_analysis:
-                st.error(f"❌ Failed to apply {recommended_method}: {str(e)}")
-            self.selection_summary['imbalance_handled'] = False
+        self.selection_summary['imbalance_details'] = {
+            'original_distribution': original_dist.to_dict(),
+            'original_samples': len(self.builder.y_train),
+            'imbalance_ratio_before': float(imbalance_analysis['metrics']['imbalance_ratio']),
+            'timing': 'Within each cross-validation training fold and final fit',
+        }
+        st.session_state.imbalance_handled = True
+        st.session_state.imbalance_skipped = False
+        self.logger.log_calculation("Automated Fold Resampling Configured", self.selection_summary['imbalance_details'])
+        if self.show_analysis:
+            st.success(f"✅ {recommended_method} will be applied within each training fold.")
 
     def _step_5_hyperparameter_optimization(self):
         """
@@ -913,12 +886,14 @@ class AutomatedModelSelectionTraining:
             if self.show_analysis:
                 st.info("🔍 Evaluating calibration options...")
 
-            # Calculate baseline metrics on test set
-            y_test = self.builder.y_test
-            X_test = self.builder.X_test
+            # Compare calibration methods on out-of-fold training predictions.
+            y_test = self.builder.y_train
+            X_train = self.builder.X_train
 
             # Get baseline predictions
-            y_pred_proba_original = original_model.predict_proba(X_test)
+            y_pred_proba_original = validation_probabilities(
+                original_model, X_train, y_test, self.builder.model.get('resampling_method')
+            )
 
             # Calculate baseline metrics
             if is_binary:
@@ -951,16 +926,16 @@ class AutomatedModelSelectionTraining:
                 try:
                     # Create calibrated version
                     calibrated_model = CalibratedClassifierCV(
-                        original_model,
+                        resampling_estimator(original_model, self.builder.model.get('resampling_method')),
                         method=method,
                         cv=5  # 5-fold cross-validation for calibration
                     )
 
-                    # Fit on training data
-                    calibrated_model.fit(self.builder.X_train, self.builder.y_train)
-
-                    # Evaluate on test set
-                    y_pred_proba_calibrated = calibrated_model.predict_proba(X_test)
+                    # Outer validation folds exclude each scored row from both
+                    # calibration and estimator fitting.
+                    y_pred_proba_calibrated = validation_probabilities(
+                        calibrated_model, X_train, y_test
+                    )
 
                     # Calculate metrics
                     if is_binary:
@@ -1052,6 +1027,8 @@ class AutomatedModelSelectionTraining:
                     st.write(f"- **Original Log Loss:** {baseline_logloss:.4f}")
                     st.write(f"- **Calibrated Log Loss:** {best_metrics['log_loss']:.4f}")
 
+                # Fit the selected calibration configuration on training data only.
+                best_metrics['model'].fit(X_train, y_test)
                 # Update the model in builder with calibrated version
                 self.builder.model['active_model'] = best_metrics['model']
                 self.builder.model['is_calibrated'] = True
@@ -1136,10 +1113,8 @@ class AutomatedModelSelectionTraining:
                 st.info(f"🎯 Using recommended criterion: **{recommended_criterion}**")
 
             # Get predictions for threshold analysis
-            y_test = self.builder.y_test
-            X_test = self.builder.X_test
-            model = self.builder.model['active_model']
-            y_prob = model.predict_proba(X_test)
+            y_test = current_analysis['y_true']
+            y_prob = current_analysis['y_prob']
 
             # Get positive class probabilities for binary classification
             if len(y_prob.shape) > 1:

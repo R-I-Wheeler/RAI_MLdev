@@ -1,5 +1,6 @@
 import optuna
 from sklearn.model_selection import cross_val_score
+from sklearn.metrics import get_scorer
 import numpy as np
 from typing import Dict, Any, Callable
 import xgboost as xgb
@@ -14,15 +15,19 @@ from sklearn.neural_network import MLPClassifier, MLPRegressor
 import plotly.graph_objects as go
 import pandas as pd
 from components.model_training.utils.parameter_ranges import AdaptiveParameterRanges
+from components.model_training.utils.validation_utils import (
+    selection_scoring, resampling_estimator, fitted_model,
+)
 
 class OptunaModelTuner:
-    def __init__(self, X_train, y_train, model_type: str, problem_type: str, cv_folds: int = 5, n_trials: int = 50):
+    def __init__(self, X_train, y_train, model_type: str, problem_type: str, cv_folds: int = 5, n_trials: int = 50, resampling_method=None):
         self.X_train = X_train
         self.y_train = y_train
         self.model_type = model_type
         self.problem_type = problem_type
         self.cv_folds = cv_folds
         self.n_trials = n_trials
+        self.resampling_method = resampling_method
         self.study = None
         self.best_model = None
         self.best_params = None
@@ -49,15 +54,7 @@ class OptunaModelTuner:
         
         def objective(trial) -> float:
             params = self._get_trial_params(trial)
-            model = self._create_model(params)
-            
-            # Use appropriate scoring metric based on problem type
-            if self.problem_type in ["classification", "binary_classification"]:
-                scoring = "f1"
-            elif self.problem_type == "multiclass_classification":
-                scoring = "f1_macro"  # Use macro-averaged F1 for multiclass
-            else:
-                scoring = "r2"
+            scorer = get_scorer(selection_scoring(self.problem_type))
             
             # Implement intermediate scoring for pruning
             scores = []
@@ -77,10 +74,11 @@ class OptunaModelTuner:
                     y_fold_train = self.y_train_values[train_idx]
                     y_fold_val = self.y_train_values[val_idx]
                 
-                # Fit model on training fold
+                # A fresh estimator and sampler see only this fold's training rows.
+                model = resampling_estimator(self._create_model(params), self.resampling_method)
                 model.fit(X_fold_train, y_fold_train)
                 
-                fold_score = model.score(X_fold_val, y_fold_val)
+                fold_score = scorer(model, X_fold_val, y_fold_val)
                 scores.append(fold_score)
                 
                 # Report intermediate value for pruning
@@ -284,19 +282,16 @@ class OptunaModelTuner:
             self.best_model = self._create_model(self.best_params)
             
             # Fit the best model with original data format
-            self.best_model.fit(self.X_train, self.y_train)
+            final_estimator = resampling_estimator(self.best_model, self.resampling_method)
+            final_estimator.fit(self.X_train, self.y_train)
+            self.best_model = fitted_model(final_estimator)
             
             # Get cross-validation results for the best model
-            if self.problem_type in ["classification", "binary_classification"]:
-                scoring = "f1"
-            elif self.problem_type == "multiclass_classification":
-                scoring = "f1_macro"  # Use macro-averaged F1 for multiclass
-            else:
-                scoring = "r2"
+            scoring = selection_scoring(self.problem_type)
             
             self.cv_results = cross_val_score(
-                self.best_model, self.X_train, self.y_train,
-                cv=self.cv_folds, scoring=scoring, n_jobs=-1
+                resampling_estimator(self.best_model, self.resampling_method), self.X_train, self.y_train,
+                cv=self.cv_splits, scoring=scoring, n_jobs=-1
             )
             
             # Calculate additional optimisation metrics
@@ -563,4 +558,4 @@ class OptunaModelTuner:
             return {
                 "success": False,
                 "message": f"Error creating optimisation plots: {str(e)}"
-            } 
+            }

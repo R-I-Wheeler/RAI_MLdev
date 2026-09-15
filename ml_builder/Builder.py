@@ -468,6 +468,15 @@ class Builder:
                     "message": "Unable to determine problem type. Please ensure data is properly loaded."
                 }
 
+            from components.model_selection.utils.model_state import selection_signature, clear_model_results
+            signature = selection_signature(self)
+            if (self.model and self.model.get("type") == model_type
+                    and self.model.get("problem_type") == problem_type
+                    and self.model.get("selection_signature", signature) == signature):
+                self.model["selection_signature"] = signature
+                self.stage_completion[ModelStage.MODEL_SELECTION] = True
+                return {"success": True, "message": "Existing model selection and training preserved."}
+
             # Simplified model configurations - only model instances needed
             # Parameter ranges are now handled by AdaptiveParameterRanges utility
             model_configs = {
@@ -505,11 +514,14 @@ class Builder:
                     "message": f"Model type '{model_type}' not available for {problem_type} problems"
                 }
 
+            # A committed change invalidates all results that depend on this model.
+            clear_model_results(self)
             # Store model configuration and type
             self.model = {
                 "model": model_configs[config_key][model_type],
                 "type": model_type,
-                "problem_type": problem_type
+                "problem_type": problem_type,
+                "selection_signature": signature,
             }
 
             # Set quantile loss for gradient boosting if target is skewed
@@ -767,7 +779,7 @@ class Builder:
 
             if problem_type in ["classification", "binary_classification", "multiclass_classification"]:
                 # Calculate metrics
-                metrics = calculate_classification_metrics(self.y_test, y_pred)
+                metrics = calculate_classification_metrics(self.y_test, y_pred, problem_type)
 
                 # Store metrics in model dictionary
                 self.model["metrics"] = metrics
@@ -1072,4 +1084,3 @@ class Builder:
         )
 
         return auto_trainer.run()
-

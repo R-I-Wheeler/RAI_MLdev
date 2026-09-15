@@ -28,45 +28,10 @@ def main():
         st.session_state.builder = Builder()
         st.session_state.logger.log_stage_transition("START", "MODEL_SELECTION")
 
-    # Check for return navigation to clear automation results
-    # If the user is navigating to this page (current_stage is not MODEL_SELECTION yet)
-    # and automation was previously completed, we should clear the results to allow a fresh start
-    if (st.session_state.builder.current_stage != ModelStage.MODEL_SELECTION and 
-        st.session_state.get('automated_model_selection_training_completed', False)):
-        
-        # Clear automation state
-        if 'automated_model_selection_training_completed' in st.session_state:
-            del st.session_state.automated_model_selection_training_completed
-        if 'automated_model_selection_training_result' in st.session_state:
-            del st.session_state.automated_model_selection_training_result
-
-        # Reset model selection and training stages
-        st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = False
-        st.session_state.builder.stage_completion[ModelStage.MODEL_TRAINING] = False
-
-        # Clear training state
-        keys_to_clear = [
-            'training_complete',
-            'training_results', 
-            'selected_model_type',
-            'selected_model_stability',
-            'previous_model_selection'
-        ]
-        for key in keys_to_clear:
-            if key in st.session_state:
-                del st.session_state[key]
-
-        # Clear builder model state
-        st.session_state.builder.model = None
-
-        # Log the auto-clear action
-        st.session_state.logger.log_user_action(
-            "Automated Model Selection & Training Results Cleared",
-            {"action": "auto_clear_on_return", "reason": "return_navigation"}
-        )
-        
-        # Display a toast to inform the user
-        st.toast("Previous automation results cleared for new selection", icon="🔄")
+    # Revisiting preserves fitted results; only changed data invalidates them.
+    from components.model_selection.utils.model_state import invalidate_changed_data
+    if invalidate_changed_data(st.session_state.builder):
+        st.info("Data changed. Select and train a model for the updated dataset.")
 
     # Set current stage to MODEL_SELECTION
     st.session_state.builder.current_stage = ModelStage.MODEL_SELECTION
@@ -218,7 +183,7 @@ def main():
 
     # Perform quick comparison
     with st.spinner("Running quick model comparison..."):
-        # Get the comparison results using training and testing data from session state
+        # Compare using a validation split drawn from training data only.
         results_df = st.session_state.builder.get_quick_model_comparison(
             sample_size=1000,
             exclude_xgboost=not xgboost_compatible
@@ -234,7 +199,7 @@ def main():
                 "problem_type": problem_type,
                 "sample_sizes": {
                     "training": len(st.session_state.builder.training_data),
-                    "testing": len(st.session_state.builder.testing_data)
+                    "validation_source": "training_data"
                 },
                 "best_model": best_model,
                 "best_metric": best_metric,
@@ -251,7 +216,10 @@ def main():
 
     # Model selection interface
     # Check if recommended model is available in the options
-    if recommended_model and recommended_model in model_options:
+    current_model = (st.session_state.builder.model or {}).get('type')
+    if current_model in model_options:
+        default_index = list(model_options.keys()).index(current_model)
+    elif recommended_model and recommended_model in model_options:
         default_index = list(model_options.keys()).index(recommended_model)
     else:
         default_index = 0  # Default to first available model

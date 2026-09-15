@@ -96,6 +96,9 @@ def main():
             st.session_state.builder.stage_completion[ModelStage.MODEL_SELECTION] = False
 
     # Initialize session caches and perform cleanup if needed
+    from components.model_selection.utils.model_state import invalidate_changed_data
+    if invalidate_changed_data(st.session_state.builder):
+        st.info("Data changed. Return to Model Selection to choose and train a model.")
     TrainingStateManager.init_session_caches()
     if TrainingStateManager.should_cleanup():
         optimization_stats = TrainingStateManager.optimize_session_state()
@@ -507,89 +510,6 @@ def main():
 
     # Show training results if they exist
     if hasattr(st.session_state, 'training_complete') and st.session_state.training_complete:
-        # ===== MODEL CHANGE DETECTION: Detect if model or dataset has changed and clear results =====
-        def get_model_signature():
-            """Create a unique signature for the current model and dataset configuration."""
-            model = st.session_state.builder.model
-            if model is None:
-                return None
-            return {
-                'model_type': model.get('type'),
-                'problem_type': model.get('problem_type'),
-                'n_features': st.session_state.builder.X_train.shape[1] if st.session_state.builder.X_train is not None else 0,
-                'n_train_samples': len(st.session_state.builder.X_train) if st.session_state.builder.X_train is not None else 0,
-                'n_test_samples': len(st.session_state.builder.X_test) if st.session_state.builder.X_test is not None else 0,
-                'feature_names': tuple(st.session_state.builder.X_train.columns) if st.session_state.builder.X_train is not None else ()
-            }
-        
-        # Check if model or dataset has changed since training was completed
-        current_signature = get_model_signature()
-        
-        if current_signature is not None:
-            if 'last_training_model_signature' in st.session_state:
-                if st.session_state.last_training_model_signature != current_signature:
-                    # Model or dataset has changed - clear all training results and reset state
-                    
-                    # Determine what changed for better user feedback
-                    prev_sig = st.session_state.last_training_model_signature
-                    change_details = []
-                    
-                    if prev_sig.get('model_type') != current_signature.get('model_type'):
-                        change_details.append(f"Model type changed from {prev_sig.get('model_type')} to {current_signature.get('model_type')}")
-                    
-                    if prev_sig.get('n_features') != current_signature.get('n_features'):
-                        change_details.append(f"Number of features changed from {prev_sig.get('n_features')} to {current_signature.get('n_features')}")
-                    
-                    if prev_sig.get('feature_names') != current_signature.get('feature_names'):
-                        if prev_sig.get('n_features') == current_signature.get('n_features'):
-                            change_details.append("Feature names have changed")
-                        # If number changed, we already reported that
-                    
-                    if prev_sig.get('n_train_samples') != current_signature.get('n_train_samples'):
-                        change_details.append(f"Training samples changed from {prev_sig.get('n_train_samples')} to {current_signature.get('n_train_samples')}")
-                    
-                    # Clear training results
-                    if 'training_complete' in st.session_state:
-                        del st.session_state.training_complete
-                    if 'training_results' in st.session_state:
-                        del st.session_state.training_results
-                    
-                    # Clear model selection state variables
-                    if 'selected_model_type' in st.session_state:
-                        del st.session_state.selected_model_type
-                    if 'selected_model_stability' in st.session_state:
-                        del st.session_state.selected_model_stability
-                    if 'previous_model_selection' in st.session_state:
-                        del st.session_state.previous_model_selection
-                    if 'previous_training_id' in st.session_state:
-                        del st.session_state.previous_training_id
-                    
-                    # Reset the navigation pill to default
-                    if 'active_training_pill' in st.session_state:
-                        del st.session_state.active_training_pill
-                    
-                    # Update signature
-                    st.session_state.last_training_model_signature = current_signature
-                    
-                    # Log the change with details
-                    st.session_state.logger.log_user_action(
-                        "Model/Dataset Change Detected in Training",
-                        {
-                            "action": "Training Results Cleared",
-                            "changes": change_details,
-                            "previous_signature": prev_sig,
-                            "current_signature": current_signature,
-                            "timestamp": str(pd.Timestamp.now())
-                        }
-                    )
-                    
-                    # Show user notification with details
-                    if change_details:
-                        details_text = "\n- ".join([""] + change_details)
-                        st.info(f"🔄 Configuration change detected:{details_text}\n\nTraining results have been cleared automatically.")
-                    else:
-                        st.info("🔄 Configuration change detected. Training results have been cleared automatically.")
-                    st.rerun()
         
         # Add a clear results button at the top of the results section
         st.header("Training Results")
@@ -887,4 +807,4 @@ def main():
     )
     
 if __name__ == "__main__":
-    main() 
+    main()

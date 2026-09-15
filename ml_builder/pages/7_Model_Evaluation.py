@@ -659,6 +659,8 @@ def main():
         model = st.session_state.builder.model
         return {
             'model_type': model.get('type'),
+            'selection_signature': model.get('selection_signature'),
+            'fitted_model_id': id(model.get('active_model', model.get('model'))),
             'hyperparameters': str(model.get('hyperparameters', {})),
             'is_calibrated': model.get('is_calibrated', False),
             'calibration_method': model.get('calibration_method', ''),
@@ -1072,4 +1074,4 @@ def main():
     )
     
 if __name__ == "__main__":
-    main() 
+    main()

@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Dict, Any, Tuple
 from content.content_manager import ContentManager
+from components.model_training.utils.validation_utils import training_validation_predictions
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -285,13 +286,10 @@ def analyze_current_performance() -> Dict[str, Any]:
     try:
         # Get model and data
         model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
-        X_test = st.session_state.builder.X_test
-        y_test = st.session_state.builder.y_test
         problem_type = st.session_state.builder.model["problem_type"]
         
         # Get predictions and probabilities
-        y_pred = model.predict(X_test)
-        y_prob = model.predict_proba(X_test)
+        y_test, y_pred, y_prob = training_validation_predictions(st.session_state.builder)
         
         # Handle binary vs multiclass
         is_binary = problem_type in ["classification", "binary_classification"]
@@ -328,9 +326,9 @@ def analyze_current_performance() -> Dict[str, Any]:
         else:
             # For multiclass classification
             accuracy = accuracy_score(y_test, y_pred)
-            precision = precision_score(y_test, y_pred, average='weighted', zero_division=0)
-            recall = recall_score(y_test, y_pred, average='weighted', zero_division=0)
-            f1 = f1_score(y_test, y_pred, average='weighted', zero_division=0)
+            precision = precision_score(y_test, y_pred, average='macro', zero_division=0)
+            recall = recall_score(y_test, y_pred, average='macro', zero_division=0)
+            f1 = f1_score(y_test, y_pred, average='macro', zero_division=0)
             
             # Get confusion matrix
             cm = confusion_matrix(y_test, y_pred)
@@ -429,11 +427,8 @@ def optimize_threshold(criterion: str, show_curves: bool, is_binary: bool):
         with st.spinner("Optimizing threshold..."):
             # Get model and data
             model = st.session_state.builder.model.get("active_model") or st.session_state.builder.model["model"]
-            X_test = st.session_state.builder.X_test
-            y_test = st.session_state.builder.y_test
-            
-            # Get probabilities
-            y_prob = model.predict_proba(X_test)
+            # Optimize on out-of-fold training predictions, never final test data.
+            y_test, _, y_prob = training_validation_predictions(st.session_state.builder)
             
             # Binary classification threshold optimization only
             if len(y_prob.shape) > 1:
@@ -784,4 +779,4 @@ def apply_optimal_threshold(optimal_threshold: float, is_binary: bool, criterion
         import traceback
         st.code(traceback.format_exc())
         if hasattr(st.session_state, 'logger'):
-            st.session_state.logger.log_error("Apply Optimal Threshold Failed", {"error": str(e), "traceback": traceback.format_exc()}) 
+            st.session_state.logger.log_error("Apply Optimal Threshold Failed", {"error": str(e), "traceback": traceback.format_exc()})

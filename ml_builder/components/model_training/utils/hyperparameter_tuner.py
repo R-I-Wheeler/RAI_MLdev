@@ -13,6 +13,7 @@ from copy import deepcopy
 from components.model_training.utils.parameter_ranges import AdaptiveParameterRanges
 from components.model_training.utils.optuna_tuner import OptunaModelTuner
 from components.model_training.utils.tuning_commons import StabilityAnalyzer, CVMetricsCalculator, PlotGenerator
+from components.model_training.utils.validation_utils import selection_scoring, resampling_estimator, fitted_model
 
 
 class HyperparameterTuner:
@@ -67,13 +68,11 @@ class HyperparameterTuner:
             else:
                 param_distributions = st.session_state.param_ranges_cache[cache_key]
 
-            # Set appropriate scoring metric based on problem type
-            if problem_type == "regression":
-                scoring = 'r2'
-            elif problem_type in ["binary_classification", "classification"]:
-                scoring = 'f1'
-            else:  # multiclass_classification
-                scoring = 'f1_macro'  # Use macro-averaged F1 for multiclass
+            scoring = selection_scoring(problem_type)
+            resampling_method = model_dict.get("resampling_method")
+            estimator = resampling_estimator(model_dict["model"], resampling_method)
+            if resampling_method and resampling_method != "None (Original Data)":
+                param_distributions = {f"model__{key}": value for key, value in param_distributions.items()}
 
             # Models that don't work well with RandomizedSearchCV
             model_type = model_dict.get("type", "")
@@ -99,7 +98,7 @@ class HyperparameterTuner:
                     # HistGradientBoosting's early_stopping parameter works with RandomizedSearchCV
                     # It uses internal validation split based on validation_fraction parameter
                     random_search = RandomizedSearchCV(
-                        estimator=model_dict["model"],
+                        estimator=estimator,
                         param_distributions=param_distributions,
                         n_iter=n_iter,
                         cv=cv_folds,
@@ -117,7 +116,7 @@ class HyperparameterTuner:
                     # Therefore, we remove it from the search and use default behavior
 
                     # Remove early stopping parameters that can't be used in Random Search
-                    params_to_remove = ['early_stopping_rounds']
+                    params_to_remove = ['early_stopping_rounds', 'model__early_stopping_rounds']
                     param_distributions_filtered = {
                         k: v for k, v in param_distributions.items()
                         if k not in params_to_remove
@@ -137,7 +136,7 @@ class HyperparameterTuner:
                             pass
 
                     random_search = RandomizedSearchCV(
-                        estimator=model_dict["model"],
+                        estimator=estimator,
                         param_distributions=param_distributions_filtered,
                         n_iter=n_iter,
                         cv=cv_folds,
@@ -151,7 +150,7 @@ class HyperparameterTuner:
             else:
                 # Standard random search for models without early stopping
                 random_search = RandomizedSearchCV(
-                    estimator=model_dict["model"],
+                    estimator=estimator,
                     param_distributions=param_distributions,
                     n_iter=n_iter,
                     cv=cv_folds,
@@ -167,6 +166,11 @@ class HyperparameterTuner:
 
             # Calculate CV metrics using actual fold scores
             cv_results = pd.DataFrame(random_search.cv_results_)
+            # Expose the original estimator's parameter names to downstream callers.
+            best_params = {key.removeprefix("model__"): value for key, value in random_search.best_params_.items()}
+            cv_results['params'] = cv_results['params'].map(
+                lambda params: {key.removeprefix("model__"): value for key, value in params.items()}
+            )
             best_index = random_search.best_index_
 
             # Get all fold scores for the best parameters first
@@ -233,7 +237,8 @@ class HyperparameterTuner:
 
             # Prepare results summary
             tuning_results = {
-                "best_params": random_search.best_params_,
+                "best_params": best_params,
+                "scoring": scoring,
                 "best_score": cv_metrics["mean_score"],
                 "best_std": cv_metrics["std_score"],
                 "all_results": {
@@ -253,7 +258,7 @@ class HyperparameterTuner:
             if problem_type == "regression":
                 # Fit the best model to calculate R2 scores
                 best_model = deepcopy(model_dict["model"])
-                best_model.set_params(**random_search.best_params_)
+                best_model.set_params(**best_params)
                 best_model.fit(X_train, y_train)
 
                 r2_train = best_model.score(X_train, y_train)
@@ -268,8 +273,8 @@ class HyperparameterTuner:
                 "success": True,
                 "message": "Hyperparameter tuning completed successfully",
                 "info": tuning_results,
-                "best_estimator": random_search.best_estimator_,
-                "best_params": random_search.best_params_,
+                "best_estimator": fitted_model(random_search.best_estimator_),
+                "best_params": best_params,
                 "optimisation_method": "random_search"
             }
 
@@ -308,7 +313,8 @@ class HyperparameterTuner:
                 model_type=model_dict["type"],
                 problem_type=model_dict["problem_type"],
                 cv_folds=cv_folds,
-                n_trials=n_trials
+                n_trials=n_trials,
+                resampling_method=model_dict.get("resampling_method"),
             )
 
             # Run optimisation
@@ -336,6 +342,7 @@ class HyperparameterTuner:
                 "success": True,
                 "message": "Hyperparameter optimisation completed successfully",
                 "info": {
+                    "scoring": selection_scoring(model_dict["problem_type"]),
                     "best_score": result["best_score"],
                     "best_params": result["best_params"],
                     "cv_metrics": {
