@@ -138,7 +138,7 @@ def display_classification_report(result):
         # Apply styling to performance metrics columns only
         style_cols = [col for col in ['precision', 'recall', 'f1-score'] if col in df.columns]
         
-        return df.style.format(format_dict).applymap(highlight_performance, subset=style_cols)
+        return df.style.format(format_dict).map(highlight_performance, subset=style_cols)
     
     # Display the styled dataframe
     st.dataframe(style_classification_dataframe(class_df_display), width='stretch')

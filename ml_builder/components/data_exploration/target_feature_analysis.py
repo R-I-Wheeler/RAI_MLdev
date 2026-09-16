@@ -880,7 +880,7 @@ def analyse_feature_relationships(data: pd.DataFrame, target_column: str) -> Non
                                 return ''
                             
                             # Apply highlighting to only the Strength column
-                            styled_table = styled_table.applymap(highlight_strength, subset=['Strength'])
+                            styled_table = styled_table.map(highlight_strength, subset=['Strength'])
                             
                             # Apply gradient to numeric columns if any (only for advanced users)
                             if user_level == "Advanced":
@@ -1741,7 +1741,7 @@ def style_and_display_table(table, title, display_cols=None, user_level="Beginne
     styled_table = styled_table.format(na_rep="—")
     
     # Apply highlighting to only the Strength column
-    styled_table = styled_table.applymap(highlight_strength, subset=['Strength'])
+    styled_table = styled_table.map(highlight_strength, subset=['Strength'])
     
     # Apply gradient to numeric columns only for advanced users
     if user_level == "Advanced":

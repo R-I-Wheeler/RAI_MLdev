@@ -589,9 +589,9 @@ class FeatureRelationshipsComponent:
                         return ''
                 
                 # Style the dataframe with better text wrapping
-                styled_df = final_df.style.applymap(
+                styled_df = final_df.style.map(
                     color_severity, subset=['Severity']
-                ).applymap(
+                ).map(
                     color_quality_score, subset=['Quality Score']
                 ).set_properties(**{
                     'text-align': 'left',
